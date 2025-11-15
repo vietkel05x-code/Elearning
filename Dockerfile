@@ -1,7 +1,11 @@
 FROM php:8.2-apache
 
-# Cài extension cho Laravel
-RUN docker-php-ext-install pdo pdo_pgsql
+# Cài thư viện hệ thống + extension cho PostgreSQL
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+ && docker-php-ext-install pdo_pgsql \
+ && docker-php-ext-enable pdo_pgsql \
+ && rm -rf /var/lib/apt/lists/*
 
 # Bật mod_rewrite để Laravel chạy route chuẩn
 RUN a2enmod rewrite
