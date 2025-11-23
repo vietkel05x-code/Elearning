@@ -20,6 +20,16 @@
   <form method="GET" action="{{ route('admin.courses.index') }}" class="admin-filters">
     <input type="text" name="search" value="{{ request('search') }}" placeholder="Tìm kiếm khóa học..." 
            class="admin-filters__search">
+    
+    <select name="category" class="admin-filters__select" onchange="this.form.submit()">
+      <option value="">Tất cả danh mục</option>
+      @foreach($categories as $cat)
+        <option value="{{ $cat->id }}" {{ request('category') == $cat->id ? 'selected' : '' }}>
+          {{ $cat->name }}
+        </option>
+      @endforeach
+    </select>
+    
     <select name="status" class="admin-filters__select" onchange="this.form.submit()">
       <option value="">Tất cả trạng thái</option>
       <option value="published" {{ request('status') == 'published' ? 'selected' : '' }}>Đã xuất bản</option>
@@ -27,8 +37,9 @@
       <option value="hidden" {{ request('status') == 'hidden' ? 'selected' : '' }}>Ẩn</option>
       <option value="archived" {{ request('status') == 'archived' ? 'selected' : '' }}>Lưu trữ</option>
     </select>
+    
     <button type="submit" class="admin-filters__button">Tìm kiếm</button>
-    @if(request('search') || request('status'))
+    @if(request('search') || request('status') || request('category'))
       <a href="{{ route('admin.courses.index') }}" class="admin-filters__clear">Xóa bộ lọc</a>
     @endif
   </form>
@@ -39,6 +50,7 @@
         <tr>
           <th>ID</th>
           <th>Tiêu đề</th>
+          <th>Danh mục</th>
           <th>Trạng thái</th>
           <th class="admin-table__cell--right">Giá</th>
           <th class="admin-table__cell--center">Hành động</th>
@@ -53,6 +65,13 @@
                 {{ $course->title }}
               </a>
               <div class="admin-table__slug">{{ $course->slug }}</div>
+            </td>
+            <td>
+              @if($course->category)
+                <span class="admin-badge admin-badge--info">{{ $course->category->name }}</span>
+              @else
+                <span class="admin-table__muted">Chưa phân loại</span>
+              @endif
             </td>
             <td>
               <span class="admin-badge admin-badge--{{ $course->status }}">
@@ -83,7 +102,7 @@
           </tr>
         @empty
           <tr>
-            <td colspan="5" class="admin-table__empty">
+            <td colspan="6" class="admin-table__empty">
               Không tìm thấy khóa học nào
             </td>
           </tr>

@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class Lesson extends Model
 {
     protected $fillable = [
-        'section_id', 'title', 'video_path', 'video_url', 'attachment_path',
-        'duration', 'is_preview', 'position',
+        'section_id', 'title', 'video_path', 'hls_path', 'video_url', 'attachment_path',
+        'duration', 'is_preview', 'position', 'cloudinary_id',
     ];
 
     protected $casts = [

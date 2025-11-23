@@ -16,9 +16,12 @@ class AuthController extends Controller
     {
         // Kiểm tra đã đăng nhập admin chưa (dùng session key riêng)
         if ($request->session()->has('admin_logged_in') && $request->session()->get('admin_user_id')) {
-            $adminUser = \App\Models\User::find($request->session()->get('admin_user_id'));
-            if ($adminUser && $adminUser->isAdmin()) {
-                return redirect()->route('admin.dashboard');
+            $panelUser = \App\Models\User::find($request->session()->get('admin_user_id'));
+            if ($panelUser) {
+                // Admin vào dashboard; instructor vào Q&A
+                return ($panelUser->role === 'admin')
+                    ? redirect()->route('admin.dashboard')
+                    : redirect()->route('admin.questions.index');
             }
         }
 
@@ -38,22 +41,18 @@ class AuthController extends Controller
         // Tìm user
         $user = \App\Models\User::where('email', $credentials['email'])->first();
 
-        // Kiểm tra user tồn tại và mật khẩu đúng
         if ($user && \Illuminate\Support\Facades\Hash::check($credentials['password'], $user->password)) {
-            // Kiểm tra user có phải admin không
-            if ($user->isAdmin()) {
-                // Lưu admin login vào session riêng (không dùng Auth::login để tránh conflict với public)
+            if ($user->role === 'admin' || $user->role === 'instructor') {
                 $request->session()->put('admin_logged_in', true);
                 $request->session()->put('admin_user_id', $user->id);
                 $request->session()->regenerate();
-
-                return redirect()->intended(route('admin.dashboard'))
-                    ->with('success', 'Đăng nhập thành công!');
-            } else {
-                return back()->withErrors([
-                    'email' => 'Tài khoản này không có quyền truy cập trang quản trị.',
-                ])->onlyInput('email');
+                // Admin vào dashboard, instructor vào Q&A
+                $target = ($user->role === 'admin') ? route('admin.dashboard') : route('admin.questions.index');
+                return redirect($target)->with('success', 'Đăng nhập thành công!');
             }
+            return back()->withErrors([
+                'email' => 'Tài khoản này không có quyền truy cập trang quản trị.',
+            ])->onlyInput('email');
         }
 
         return back()->withErrors([

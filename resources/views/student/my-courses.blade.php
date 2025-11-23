@@ -3,6 +3,15 @@
 @section('title', 'Khóa học của tôi')
 
 @section('content')
+
+@php
+  $breadcrumbItems = [
+    ['label' => 'Trang chủ', 'url' => route('home')],
+    ['label' => 'Khóa học của tôi']
+  ];
+@endphp
+@include('components.breadcrumb', ['items' => $breadcrumbItems])
+
 <section class="page-wrapper" style="max-width:1200px;margin:40px auto;padding:0 20px">
   <h1 style="margin-bottom:24px">Khóa học của tôi</h1>
 

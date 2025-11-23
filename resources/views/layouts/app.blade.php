@@ -6,6 +6,7 @@
     <title>@yield('title', 'E-Learning')</title>
     <link rel="stylesheet" href="{{ asset('css/main.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    @stack('styles')
 
 </head>
 <body>
@@ -34,7 +35,8 @@
         </div>
 
         <div class="navbar-right">
-            <a href="{{ route('cart.index') }}" class="header-icon-btn cart-icon" title="Giỏ hàng">
+            {{-- Cart icon temporarily hidden --}}
+            {{-- <a href="{{ route('cart.index') }}" class="header-icon-btn cart-icon" title="Giỏ hàng">
                 <i class="fas fa-shopping-cart"></i>
                 @php
                     $cartCount = count(session()->get('cart', []));
@@ -42,7 +44,7 @@
                 @if($cartCount > 0)
                     <span class="icon-badge">{{ $cartCount }}</span>
                 @endif
-            </a>
+            </a> --}}
             
             @auth
                 <a href="{{ route('notifications.index') }}" class="header-icon-btn notification-icon" title="Thông báo">
@@ -50,8 +52,8 @@
                     @php
                         $unreadCount = Auth::user()->unreadNotificationsCount();
                     @endphp
-                    @if($unreadCount > 0)
-                        <span class="icon-badge notification-badge">{{ $unreadCount > 9 ? '9+' : $unreadCount }}</span>
+                    @if(($unreadCount ?? 0) > 0)
+                        <span class="icon-badge notification-badge">{{ ($unreadCount ?? 0) > 9 ? '9+' : ($unreadCount ?? 0) }}</span>
                     @endif
                 </a>
                 
@@ -72,10 +74,18 @@
                         <a href="{{ route('profile.show') }}"><i class="fas fa-user"></i> Thông tin cá nhân</a>
                         <a href="{{ route('student.courses') }}"><i class="fas fa-book"></i> Khóa học của tôi</a>
                         <a href="{{ route('orders.index') }}"><i class="fas fa-receipt"></i> Đơn hàng</a>
+                        
+                        @if(Auth::user()->isInstructor())
+                            <hr>
+                            <a href="{{ route('instructor.questions.index') }}" style="background: #f7f9fa;">
+                                <i class="fas fa-chalkboard-teacher"></i> Quản lý Hỏi đáp (Giảng viên)
+                            </a>
+                        @endif
+                        
                         <a href="{{ route('notifications.index') }}">
                             <i class="fas fa-bell"></i> Thông báo
-                            @if($unreadCount > 0)
-                                <span class="menu-badge">{{ $unreadCount > 9 ? '9+' : $unreadCount }}</span>
+                            @if(($unreadCount ?? 0) > 0)
+                                <span class="menu-badge">{{ ($unreadCount ?? 0) > 9 ? '9+' : ($unreadCount ?? 0) }}</span>
                             @endif
                         </a>
                         <hr>

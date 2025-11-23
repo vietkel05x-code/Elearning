@@ -14,6 +14,12 @@ class DashboardController extends Controller
 {
     public function index()
     {
+        // Nếu là giảng viên (không phải admin) thì chuyển thẳng tới trang Q&A
+        $panelUser = \App\Helpers\AdminHelper::user();
+        if ($panelUser && $panelUser->role === 'instructor') {
+            return redirect()->route('admin.questions.index');
+        }
+
         $stats = [
             'total_courses' => Course::count(),
             'published_courses' => Course::where('status', 'published')->count(),

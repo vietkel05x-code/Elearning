@@ -46,11 +46,13 @@
              class="profile-form__input">
     </div>
 
-    <!-- Email -->
+    <!-- Email (read-only) -->
     <div class="profile-form__field">
-      <label for="email" class="profile-form__label">Email *</label>
-      <input type="email" name="email" id="email" value="{{ old('email', Auth::user()->email) }}" required
-             class="profile-form__input">
+      <label class="profile-form__label">Email</label>
+      <div class="profile-form__readonly" style="background:#f5f5f5;border:1px solid #ddd;padding:.65rem .75rem;border-radius:6px;font-size:.95rem;box-sizing:border-box;word-break:break-word;">
+        {{ Auth::user()->email }}
+      </div>
+      <small class="profile-form__help">Email được cố định để bảo mật. Liên hệ hỗ trợ nếu cần thay đổi.</small>
     </div>
 
     <!-- Current Password -->

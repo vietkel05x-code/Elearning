@@ -40,6 +40,11 @@ class Course extends Model
         return $this->hasMany(Section::class)->orderBy('position');
     }
 
+    public function lessons()
+    {
+        return $this->hasManyThrough(\App\Models\Lesson::class, \App\Models\Section::class);
+    }
+
     public function enrollments()
     {
         return $this->hasMany(Enrollment::class);
@@ -53,6 +58,11 @@ class Course extends Model
     public function orderItems()
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function questions()
+    {
+        return $this->hasMany(Question::class);
     }
 
     // Helper methods
@@ -70,5 +80,79 @@ class Course extends Model
             return asset('img/courses/' . $this->thumbnail_path);
         }
         return asset('img/courses/default.jpg');
+    }
+
+    /**
+     * Format total_duration for display
+     * Returns formatted string: "X giây", "X phút Y giây", or "X giờ Y phút Z giây"
+     */
+    public function getFormattedTotalDurationAttribute()
+    {
+        $seconds = (int) ($this->total_duration ?? 0);
+        
+        if ($seconds < 60) {
+            // Less than 1 minute: show seconds only
+            return $seconds . ' giây';
+        } elseif ($seconds < 3600) {
+            // Less than 60 minutes: show minutes and seconds
+            $minutes = floor($seconds / 60);
+            $remainingSeconds = $seconds % 60;
+            
+            if ($remainingSeconds > 0) {
+                return $minutes . ' phút ' . $remainingSeconds . ' giây';
+            } else {
+                return $minutes . ' phút';
+            }
+        } else {
+            // 60 minutes or more: show hours, minutes
+            $hours = floor($seconds / 3600);
+            $remainingSeconds = $seconds % 3600;
+            $minutes = floor($remainingSeconds / 60);
+            // $secs = $remainingSeconds % 60;
+            
+            $parts = [];
+            $parts[] = $hours . ' giờ';
+            
+            if ($minutes > 0) {
+                $parts[] = $minutes . ' phút';
+            }
+            
+            // if ($secs > 0) {
+            //     $parts[] = $secs . ' giây';
+            // }
+            
+            return implode(' ', $parts);
+        }
+    }
+
+    /**
+     * Update total_duration by summing all lesson durations in this course
+     */
+    public function updateTotalDuration()
+    {
+        $totalDuration = 0;
+        
+        // Get all lessons through sections
+        foreach ($this->sections as $section) {
+            foreach ($section->lessons as $lesson) {
+                $totalDuration += (int) ($lesson->duration ?? 0);
+            }
+        }
+        
+        $this->total_duration = $totalDuration;
+        $this->save();
+        
+        return $totalDuration;
+    }
+    public function updateVideoCount()
+    {
+        // Nếu Lesson có SoftDeletes và bạn chỉ muốn đếm lesson chưa xóa:
+        // $count = $this->lessons()->whereNull('deleted_at')->count();
+        $count = $this->lessons()->count();
+
+        $this->video_count = $count;
+        $this->save();
+
+        return $count;
     }
 }

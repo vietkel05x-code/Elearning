@@ -44,7 +44,7 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:student,admin',
+            'role' => 'required|in:student,instructor,admin',
         ]);
 
         User::create([
@@ -66,7 +66,7 @@ class UserController extends Controller
     {
         // Chỉ cho phép sửa vai trò
         $validated = $request->validate([
-            'role' => 'required|in:student,admin',
+            'role' => 'required|in:student,instructor,admin',
         ]);
 
         $user->role = $validated['role'];

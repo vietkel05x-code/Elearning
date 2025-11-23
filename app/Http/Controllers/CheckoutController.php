@@ -14,6 +14,38 @@ class CheckoutController extends Controller
 {
     public function index()
     {
+        // Check if this is a direct checkout
+        $directCourseId = session()->get('direct_checkout_course');
+        if ($directCourseId) {
+            $course = Course::find($directCourseId);
+            if ($course) {
+                // Check if already enrolled
+                if (Auth::check() && $course->isEnrolledBy(Auth::id())) {
+                    session()->forget('direct_checkout_course');
+                    return redirect()->route('courses.show', $course->slug)
+                        ->with('error', 'Bạn đã đăng ký khóa học này rồi!');
+                }
+                
+                $courses = [$course];
+                $subtotal = $course->price;
+
+                // Check coupon if exists
+                $discount = 0;
+                $couponCode = session()->get('coupon_code');
+                $coupon = null;
+                if ($couponCode) {
+                    $coupon = \App\Models\Coupon::where('code', $couponCode)->first();
+                    if ($coupon && $coupon->isValid()) {
+                        $discount = $coupon->calculateDiscount($subtotal);
+                    }
+                }
+                $total = $subtotal - $discount;
+
+                return view('checkout.index', compact('courses', 'subtotal', 'discount', 'total', 'couponCode', 'coupon'));
+            }
+        }
+        
+        // Regular cart checkout
         $cart = session()->get('cart', []);
         
         if (empty($cart)) {
@@ -90,9 +122,10 @@ class CheckoutController extends Controller
             }
             $total = $subtotal - $discount;
 
-            // Create order with pending status
+            // Create order with pending status (lưu coupon nếu có)
             $order = Order::create([
                 'user_id' => Auth::id(),
+                'coupon_id' => ($coupon ?? null)?->id,
                 'code' => Order::generateCode(),
                 'subtotal' => $subtotal,
                 'discount' => $discount,
@@ -159,6 +192,154 @@ class CheckoutController extends Controller
 
         return redirect()->route('checkout.index')
             ->with('success', 'Đã xóa mã giảm giá!');
+    }
+
+    /**
+     * Direct checkout for a single course (without cart)
+     */
+    public function direct(Course $course)
+    {
+        // Check if already enrolled
+        if (Auth::check() && $course->isEnrolledBy(Auth::id())) {
+            return redirect()->route('courses.show', $course->slug)
+                ->with('error', 'Bạn đã đăng ký khóa học này rồi!');
+        }
+
+        // If course is free (price = 0), automatically enroll and create order
+        if ($course->price == 0) {
+            DB::beginTransaction();
+            try {
+                // Create order with paid status (free course)
+                $order = Order::create([
+                    'user_id' => Auth::id(),
+                    'code' => Order::generateCode(),
+                    'subtotal' => 0,
+                    'discount' => 0,
+                    'total' => 0,
+                    'status' => 'paid', // Free course is automatically paid
+                ]);
+
+                // Create order item
+                OrderItem::create([
+                    'order_id' => $order->id,
+                    'course_id' => $course->id,
+                    'price' => 0,
+                ]);
+
+                // Create enrollment
+                Enrollment::create([
+                    'user_id' => Auth::id(),
+                    'course_id' => $course->id,
+                    'status' => 'active',
+                    'enrolled_at' => now(),
+                ]);
+
+                // Update course enrolled count
+                $course->increment('enrolled_students');
+
+                DB::commit();
+
+                return redirect()->route('student.learn', $course->slug)
+                    ->with('success', 'Bạn đã tham gia khóa học miễn phí thành công!');
+            } catch (\Exception $e) {
+                DB::rollBack();
+                return redirect()->route('courses.show', $course->slug)
+                    ->with('error', 'Có lỗi xảy ra: ' . $e->getMessage());
+            }
+        }
+
+        // For paid courses, show checkout page
+        // Add course to session for checkout (temporary, will be cleared after checkout)
+        session()->put('direct_checkout_course', $course->id);
+        
+        // Prepare checkout data
+        $courses = [$course];
+        $subtotal = $course->price;
+
+        // Check coupon if exists
+        $discount = 0;
+        $couponCode = session()->get('coupon_code');
+        $coupon = null;
+        if ($couponCode) {
+            $coupon = \App\Models\Coupon::where('code', $couponCode)->first();
+            if ($coupon && $coupon->isValid()) {
+                $discount = $coupon->calculateDiscount($subtotal);
+            }
+        }
+        $total = $subtotal - $discount;
+
+        return view('checkout.index', compact('courses', 'subtotal', 'discount', 'total', 'couponCode', 'coupon'));
+    }
+
+    /**
+     * Process direct checkout
+     */
+    public function processDirect(Request $request, Course $course)
+    {
+        $validated = $request->validate([
+            'payment_method' => 'required|in:momo,vnpay,bank_transfer',
+        ]);
+
+        // Check if already enrolled
+        if ($course->isEnrolledBy(Auth::id())) {
+            return redirect()->route('courses.show', $course->slug)
+                ->with('error', 'Bạn đã đăng ký khóa học này rồi!');
+        }
+
+        DB::beginTransaction();
+        try {
+            $subtotal = $course->price;
+
+            // Check coupon if exists
+            $discount = 0;
+            $couponCode = session()->get('coupon_code');
+            if ($couponCode) {
+                $coupon = \App\Models\Coupon::where('code', $couponCode)->first();
+                if ($coupon && $coupon->isValid()) {
+                    $discount = $coupon->calculateDiscount($subtotal);
+                }
+            }
+            $total = $subtotal - $discount;
+
+            // Create order with pending status (lưu coupon nếu có)
+            $order = Order::create([
+                'user_id' => Auth::id(),
+                'coupon_id' => ($coupon ?? null)?->id,
+                'code' => Order::generateCode(),
+                'subtotal' => $subtotal,
+                'discount' => $discount,
+                'total' => $total,
+                'status' => 'pending', // Will be updated after payment
+            ]);
+
+            // Create order item
+            OrderItem::create([
+                'order_id' => $order->id,
+                'course_id' => $course->id,
+                'price' => $course->price,
+            ]);
+
+            DB::commit();
+
+            // Clear direct checkout session
+            session()->forget('direct_checkout_course');
+
+            // Redirect to payment gateway based on method
+            $paymentMethod = $validated['payment_method'];
+            
+            if ($paymentMethod === 'bank_transfer') {
+                // For bank transfer, show instructions and mark as paid after confirmation
+                return redirect()->route('payment.bank-transfer', $order);
+            } else {
+                // For MoMo and VNPay, redirect to payment gateway
+                return redirect()->route('payment.gateway', ['order' => $order->id, 'method' => $paymentMethod]);
+            }
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->route('courses.show', $course->slug)
+                ->with('error', 'Có lỗi xảy ra: ' . $e->getMessage());
+        }
     }
 }
 

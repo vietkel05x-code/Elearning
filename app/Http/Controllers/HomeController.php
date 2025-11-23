@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Category;
 use App\Models\Course;
+use App\Models\Review;
 
 class HomeController extends Controller
 {
@@ -31,7 +32,29 @@ class HomeController extends Controller
                 ->get();
         }
 
-        // ✅ Trả dữ liệu về view
-        return view('home', compact('categories', 'featuredCourses', 'topCategories', 'coursesByCategory'));
+        // ✅ Khóa học thịnh hành (nhiều học viên)
+        $trendingCourses = Course::where('status', 'published')
+            ->orderByDesc('enrolled_students')
+            ->take(8)
+            ->get();
+
+        // ✅ Khóa học mới nhất
+        $newestCourses = Course::where('status', 'published')
+            ->latest()
+            ->take(8)
+            ->get();
+
+        // ✅ Đánh giá mới nhất (chỉ lấy có nội dung)
+        $latestReviews = Review::with(['user', 'course'])
+            ->whereNotNull('content')
+            ->latest()
+            ->take(6)
+            ->get();
+
+        // ✅ Trả dữ liệu về view (chỉ dữ liệu thật từ DB)
+        return view('home', compact(
+            'categories', 'featuredCourses', 'topCategories', 'coursesByCategory',
+            'trendingCourses', 'newestCourses', 'latestReviews'
+        ));
     }
 }

@@ -96,6 +96,16 @@ class User extends Authenticatable
         return $this->unreadNotifications()->count();
     }
 
+    public function questions()
+    {
+        return $this->hasMany(Question::class);
+    }
+
+    public function answers()
+    {
+        return $this->hasMany(Answer::class);
+    }
+
     // Helper methods
     public function isAdmin()
     {
@@ -104,7 +114,12 @@ class User extends Authenticatable
 
     public function isInstructor()
     {
-        return $this->role === 'instructor' || $this->isAdmin();
+        return $this->role === 'instructor';
+    }
+
+    public function isStudent()
+    {
+        return $this->role === 'student';
     }
 
     public function getAvatarUrlAttribute()

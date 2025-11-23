@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Section;
 use App\Models\Lesson;
 use App\Services\YouTubeService;
+use App\Services\HLSConverter;
+use App\Services\CloudinaryService;
+use App\Jobs\ConvertVideoToHLS;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +22,7 @@ class LessonController extends Controller
             'title' => 'required|string|max:255',
             'video_file' => 'nullable|file|mimes:mp4,avi,mov,wmv,flv,webm|max:1331200', // 1.3GB max (1331200 KB)
             'video_path' => 'nullable|string|max:500',
+            'hls_path' => 'nullable|string|max:500',
             'video_url' => 'nullable|url|max:500',
             'attachment_file' => 'nullable|file|mimes:pdf,doc,docx,zip,rar|max:1331200', // 1.3GB max
             'attachment_path' => 'nullable|string|max:500',
@@ -26,23 +30,97 @@ class LessonController extends Controller
             'position' => 'nullable|integer',
         ]);
 
-        // Handle video file upload
+        // Handle video file upload - Only Cloudinary or HLS (no direct video_path)
         if ($request->hasFile('video_file')) {
             $videoFile = $request->file('video_file');
-            $videoPath = $videoFile->store('videos/lessons', 'public');
-            $validated['video_path'] = $videoPath;
             
-            // Calculate duration immediately from uploaded file (before it's moved)
-            $tempPath = $videoFile->getRealPath();
-            if ($tempPath && file_exists($tempPath)) {
-                $calculatedDuration = $this->getVideoDurationFromPath($tempPath);
-                if ($calculatedDuration > 0) {
-                    $validated['duration'] = $calculatedDuration;
-                    Log::info('Duration calculated from uploaded file (temp path)', [
-                        'duration' => $calculatedDuration,
-                        'file' => $videoFile->getClientOriginalName()
+            // ALWAYS try Cloudinary first (credentials are configured)
+            $cloudinaryService = new CloudinaryService();
+            $isCloudinaryConfigured = $cloudinaryService->isConfigured();
+            
+            Log::info('Video upload - Checking Cloudinary', [
+                'is_configured' => $isCloudinaryConfigured,
+                'cloud_name' => config('services.cloudinary.cloud_name'),
+                'has_api_key' => !empty(config('services.cloudinary.api_key')),
+                'file_name' => $videoFile->getClientOriginalName(),
+                'file_size' => $videoFile->getSize(),
+            ]);
+            
+            if ($isCloudinaryConfigured) {
+                try {
+                    // Get course name for folder organization
+                    $course = $section->course;
+                    $courseName = $course->title ?? 'lessons';
+                    
+                    // Sanitize course name for Cloudinary folder
+                    // Format: videos/{sanitized_course_name}
+                    $folderName = $cloudinaryService->sanitizeFolderName($courseName);
+                    $cloudinaryFolder = "videos/{$folderName}";
+                    
+                    Log::info('Attempting Cloudinary upload', [
+                        'file_path' => $videoFile->getRealPath(),
+                        'file_exists' => file_exists($videoFile->getRealPath()),
+                        'course_name' => $courseName,
+                        'cloudinary_folder' => $cloudinaryFolder,
                     ]);
+                    
+                    // Upload to Cloudinary with course-specific folder
+                    $uploadResult = $cloudinaryService->uploadVideo($videoFile->getRealPath(), [
+                        'folder' => $cloudinaryFolder,
+                    ]);
+                    
+                    Log::info('Cloudinary upload result', [
+                        'success' => $uploadResult['success'] ?? false,
+                        'error' => $uploadResult['error'] ?? null,
+                        'public_id' => $uploadResult['public_id'] ?? null,
+                    ]);
+                    
+                    if ($uploadResult['success']) {
+                        // Store Cloudinary direct video URL (not HLS) for immediate playback
+                        // Use secure_url instead of hls_url to avoid waiting for HLS generation
+                        $validated['video_url'] = $uploadResult['secure_url'];
+                        $validated['cloudinary_id'] = $uploadResult['public_id'];
+                        // Cloudinary returns duration in SECONDS, store as seconds
+                        $validated['duration'] = (int) ($uploadResult['duration'] ?? 0);
+                        $validated['video_path'] = null; // No local storage
+                        $validated['hls_path'] = null; // No local HLS
+                        
+                        Log::info('Video uploaded to Cloudinary successfully (using direct URL)', [
+                            'public_id' => $uploadResult['public_id'],
+                            'secure_url' => $uploadResult['secure_url'],
+                            'hls_url' => $uploadResult['hls_url'] ?? null,
+                            'duration' => $uploadResult['duration'],
+                            'duration_in_seconds' => $validated['duration'],
+                            'file' => $videoFile->getClientOriginalName(),
+                        ]);
+                    } else {
+                        // Fallback to local HLS conversion if Cloudinary fails
+                        Log::warning('Cloudinary upload failed, falling back to local HLS conversion', [
+                            'error' => $uploadResult['error'] ?? 'Unknown error',
+                        ]);
+                        $this->handleLocalHLSConversion($request, $validated);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Cloudinary upload exception, falling back to local HLS conversion', [
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]);
+                    $this->handleLocalHLSConversion($request, $validated);
                 }
+            } else {
+                // Cloudinary not configured, use local HLS conversion
+                Log::warning('Cloudinary not configured, using local HLS conversion', [
+                    'cloud_name' => config('services.cloudinary.cloud_name'),
+                ]);
+                $this->handleLocalHLSConversion($request, $validated);
+            }
+        } else {
+            // No video file uploaded, preserve video_url from request (for YouTube/other URLs)
+            if ($request->filled('video_url')) {
+                $validated['video_url'] = $request->input('video_url');
+                Log::info('Preserving video_url from request (no file upload)', [
+                    'video_url' => $validated['video_url'],
+                ]);
             }
         }
 
@@ -56,40 +134,33 @@ class LessonController extends Controller
         unset($validated['video_file'], $validated['attachment_file']);
 
         // Auto-calculate duration if not already calculated from uploaded file
-        if (!isset($validated['duration']) || $validated['duration'] == null || $validated['duration'] == 0) {
-            // Try YouTube API first if video_url is provided
-            if (!empty($validated['video_url'])) {
-                $youtubeService = new YouTubeService();
-                if ($youtubeService->isYouTubeUrl($validated['video_url'])) {
-                    $youtubeDuration = $youtubeService->getVideoDuration($validated['video_url']);
-                    if ($youtubeDuration['seconds'] > 0) {
-                        // Store duration in seconds for precision (will be converted to minutes for display)
-                        $validated['duration'] = (int) $youtubeDuration['seconds'];
-                        Log::info('Duration calculated from YouTube API', [
-                            'url' => $validated['video_url'],
-                            'seconds' => $youtubeDuration['seconds'],
-                            'minutes' => $youtubeDuration['duration'],
-                            'formatted' => $youtubeDuration['formatted']
-                        ]);
-                    }
+        // ALWAYS prefer YouTube API if YouTube URL is provided (even if user entered duration manually)
+        // This ensures we store SECONDS, not minutes
+        if (!empty($validated['video_url'])) {
+            $youtubeService = new YouTubeService();
+            if ($youtubeService->isYouTubeUrl($validated['video_url'])) {
+                $youtubeDuration = $youtubeService->getVideoDuration($validated['video_url']);
+                if ($youtubeDuration['seconds'] > 0) {
+                    // YouTube API returns duration in ISO 8601 format, parsed to SECONDS
+                    // Store duration in SECONDS (not minutes) for precision
+                    // Override any manually entered duration to ensure consistency
+                    $validated['duration'] = (int) $youtubeDuration['seconds'];
+                    Log::info('Duration calculated from YouTube API (overriding form input if any)', [
+                        'url' => $validated['video_url'],
+                        'seconds' => $youtubeDuration['seconds'],  // This is what we store
+                        'minutes' => $youtubeDuration['duration'],  // For display only
+                        'formatted' => $youtubeDuration['formatted'],
+                        'stored_as' => 'seconds',
+                        'note' => 'Duration stored in database as SECONDS, not minutes. Form input ignored for YouTube URLs.'
+                    ]);
                 }
             }
-            
-            // If still no duration, try from stored video path
-            if ((!isset($validated['duration']) || $validated['duration'] == 0) && !empty($validated['video_path']) && !$request->hasFile('video_file')) {
-                // Try to calculate from stored video path (if file was uploaded previously)
-                $videoFile = Storage::disk('public')->path($validated['video_path']);
-                if (file_exists($videoFile)) {
-                    $calculatedDuration = $this->getVideoDurationFromPath($videoFile);
-                    if ($calculatedDuration > 0) {
-                        $validated['duration'] = $calculatedDuration;
-                        Log::info('Duration calculated from stored video_path', [
-                            'path' => $validated['video_path'],
-                            'duration' => $calculatedDuration
-                        ]);
-                    }
-                }
-            }
+        }
+        
+        // If no YouTube URL or YouTube API failed, check if duration was manually entered
+        // Note: Manual input should be in SECONDS (form label says "giây")
+        if ((!isset($validated['duration']) || $validated['duration'] == null || $validated['duration'] == 0) && empty($validated['video_url'])) {
+            // Note: No longer calculating duration from video_path as we don't store direct video files
         }
         
         // Ensure duration is always set (not null) - default to 0
@@ -97,8 +168,9 @@ class LessonController extends Controller
             $validated['duration'] = 0;
             Log::info('Duration set to default 0', [
                 'has_video_file' => $request->hasFile('video_file'),
-                'has_video_path' => !empty($validated['video_path'] ?? ''),
-                'has_video_url' => !empty($validated['video_url'] ?? '')
+                'has_video_url' => !empty($validated['video_url'] ?? ''),
+                'has_hls_path' => !empty($validated['hls_path'] ?? ''),
+                'has_cloudinary_id' => !empty($validated['cloudinary_id'] ?? '')
             ]);
         }
 
@@ -115,11 +187,29 @@ class LessonController extends Controller
 
         $lesson = $section->lessons()->create($validated);
 
+        // Convert HLS only if using local storage (not Cloudinary)
+        // Use background job to avoid blocking the request
+        if ($request->hasFile('video_file') && !empty($validated['_temp_video_path']) && empty($validated['cloudinary_id'])) {
+            // Dispatch to background job instead of running synchronously
+            ConvertVideoToHLS::dispatch($lesson, $validated['_temp_video_path'])
+                ->onQueue('default');
+            
+            Log::info('HLS conversion dispatched to background job', [
+                'lesson_id' => $lesson->id,
+                'temp_path' => $validated['_temp_video_path'],
+            ]);
+        }
+
         // Update course video count
         $course = $section->course;
-        $course->increment('video_count');
+        // $course->increment('video_count');
+        $course->updateVideoCount();
+        
+        // Update course total duration
+        $course->updateTotalDuration();
 
-        return back()->with('success', 'Đã thêm bài học mới!');
+        // Redirect to admin course edit page instead of back() to avoid showing success on public course page
+        return redirect()->route('admin.courses.edit', $course)->with('success', 'Đã thêm bài học mới!');
     }
 
     public function update(Request $request, Lesson $lesson)
@@ -128,6 +218,7 @@ class LessonController extends Controller
             'title' => 'required|string|max:255',
             'video_file' => 'nullable|file|mimes:mp4,avi,mov,wmv,flv,webm|max:1331200', // 1.3GB max (1331200 KB)
             'video_path' => 'nullable|string|max:500',
+            'hls_path' => 'nullable|string|max:500',
             'video_url' => 'nullable|url|max:500',
             'attachment_file' => 'nullable|file|mimes:pdf,doc,docx,zip,rar|max:1331200', // 1.3GB max
             'attachment_path' => 'nullable|string|max:500',
@@ -135,14 +226,97 @@ class LessonController extends Controller
             'position' => 'nullable|integer',
         ]);
 
-        // Handle video file upload
+        // Handle video file upload - Only Cloudinary or HLS (no direct video_path)
         if ($request->hasFile('video_file')) {
-            // Delete old video if exists
-            if ($lesson->video_path) {
-                Storage::disk('public')->delete($lesson->video_path);
+            // Delete old HLS files if exists
+            if ($lesson->hls_path) {
+                $hlsConverter = new HLSConverter();
+                $hlsConverter->deleteHLSFiles(dirname($lesson->hls_path));
             }
-            $videoPath = $request->file('video_file')->store('videos/lessons', 'public');
-            $validated['video_path'] = $videoPath;
+            // Delete old Cloudinary video if exists
+            if ($lesson->cloudinary_id) {
+                $cloudinaryService = new CloudinaryService();
+                if ($cloudinaryService->isConfigured()) {
+                    $cloudinaryService->deleteVideo($lesson->cloudinary_id);
+                }
+            }
+            
+            $videoFile = $request->file('video_file');
+            
+            // ALWAYS try Cloudinary first (credentials are configured)
+            $cloudinaryService = new CloudinaryService();
+            $isCloudinaryConfigured = $cloudinaryService->isConfigured();
+            
+            Log::info('Video upload (update) - Checking Cloudinary', [
+                'is_configured' => $isCloudinaryConfigured,
+                'cloud_name' => config('services.cloudinary.cloud_name'),
+                'file_name' => $videoFile->getClientOriginalName(),
+            ]);
+            
+            if ($isCloudinaryConfigured) {
+                try {
+                    // Get course name for folder organization
+                    $course = $lesson->section->course;
+                    $courseName = $course->title ?? 'lessons';
+                    
+                    // Sanitize course name for Cloudinary folder
+                    // Format: videos/{sanitized_course_name}
+                    $folderName = $cloudinaryService->sanitizeFolderName($courseName);
+                    $cloudinaryFolder = "videos/{$folderName}";
+                    
+                    Log::info('Attempting Cloudinary upload (update)', [
+                        'file_path' => $videoFile->getRealPath(),
+                        'course_name' => $courseName,
+                        'cloudinary_folder' => $cloudinaryFolder,
+                    ]);
+                    
+                    // Upload to Cloudinary with course-specific folder
+                    $uploadResult = $cloudinaryService->uploadVideo($videoFile->getRealPath(), [
+                        'folder' => $cloudinaryFolder,
+                    ]);
+                    
+                    Log::info('Cloudinary upload result (update)', [
+                        'success' => $uploadResult['success'] ?? false,
+                        'error' => $uploadResult['error'] ?? null,
+                    ]);
+                    
+                    if ($uploadResult['success']) {
+                        // Store Cloudinary direct video URL (not HLS) for immediate playback
+                        // Use secure_url instead of hls_url to avoid waiting for HLS generation
+                        $validated['video_url'] = $uploadResult['secure_url'];
+                        $validated['cloudinary_id'] = $uploadResult['public_id'];
+                        // Cloudinary returns duration in SECONDS, store as seconds
+                        $validated['duration'] = (int) ($uploadResult['duration'] ?? 0);
+                        $validated['video_path'] = null; // No local storage
+                        $validated['hls_path'] = null; // No local HLS
+                        
+                        Log::info('Video uploaded to Cloudinary successfully (update, using direct URL)', [
+                            'public_id' => $uploadResult['public_id'],
+                            'secure_url' => $uploadResult['secure_url'],
+                            'hls_url' => $uploadResult['hls_url'] ?? null,
+                            'duration' => $uploadResult['duration'],
+                            'duration_in_seconds' => $validated['duration'],
+                            'file' => $videoFile->getClientOriginalName(),
+                        ]);
+                    } else {
+                        // Fallback to local HLS conversion if Cloudinary fails
+                        Log::warning('Cloudinary upload failed, falling back to local HLS conversion (update)', [
+                            'error' => $uploadResult['error'] ?? 'Unknown error',
+                        ]);
+                        $this->handleLocalHLSConversion($request, $validated);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Cloudinary upload exception, falling back to local HLS conversion (update)', [
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]);
+                    $this->handleLocalHLSConversion($request, $validated);
+                }
+            } else {
+                // Cloudinary not configured, use local HLS conversion
+                Log::warning('Cloudinary not configured, using local HLS conversion (update)');
+                $this->handleLocalHLSConversion($request, $validated);
+            }
         }
 
         // Handle attachment file upload
@@ -159,34 +333,32 @@ class LessonController extends Controller
         unset($validated['video_file'], $validated['attachment_file']);
 
         // Auto-calculate duration from video file if available and not manually set
-        if ((!isset($validated['duration']) || $validated['duration'] == null || $validated['duration'] == 0) || $request->hasFile('video_file')) {
-            if ($request->hasFile('video_file')) {
-                $duration = $this->getVideoDuration($request->file('video_file'));
-                $validated['duration'] = $duration;
-            } elseif (!empty($validated['video_url'])) {
-                // Try YouTube API if video_url is provided
-                $youtubeService = new YouTubeService();
-                if ($youtubeService->isYouTubeUrl($validated['video_url'])) {
-                    $youtubeDuration = $youtubeService->getVideoDuration($validated['video_url']);
-                    if ($youtubeDuration['seconds'] > 0) {
-                        // Store duration in seconds for precision
-                        $validated['duration'] = (int) $youtubeDuration['seconds'];
-                        Log::info('Duration calculated from YouTube API (update)', [
-                            'url' => $validated['video_url'],
-                            'seconds' => $youtubeDuration['seconds'],
-                            'minutes' => $youtubeDuration['duration'],
-                            'formatted' => $youtubeDuration['formatted']
-                        ]);
-                    }
-                }
-            } elseif (!empty($validated['video_path'])) {
-                $videoFile = Storage::disk('public')->path($validated['video_path']);
-                if (file_exists($videoFile)) {
-                    $duration = $this->getVideoDurationFromPath($videoFile);
-                    $validated['duration'] = $duration;
+        // ALWAYS prefer YouTube API if YouTube URL is provided (even if user entered duration manually)
+        // This ensures we store SECONDS, not minutes
+        if (!empty($validated['video_url'])) {
+            $youtubeService = new YouTubeService();
+            if ($youtubeService->isYouTubeUrl($validated['video_url'])) {
+                $youtubeDuration = $youtubeService->getVideoDuration($validated['video_url']);
+                if ($youtubeDuration['seconds'] > 0) {
+                    // YouTube API returns duration in ISO 8601 format, parsed to SECONDS
+                    // Store duration in SECONDS (not minutes) for precision
+                    // Override any manually entered duration to ensure consistency
+                    $validated['duration'] = (int) $youtubeDuration['seconds'];
+                    Log::info('Duration calculated from YouTube API (update, overriding form input if any)', [
+                        'url' => $validated['video_url'],
+                        'seconds' => $youtubeDuration['seconds'],  // This is what we store
+                        'minutes' => $youtubeDuration['duration'],  // For display only
+                        'formatted' => $youtubeDuration['formatted'],
+                        'stored_as' => 'seconds',
+                        'note' => 'Duration stored in database as SECONDS, not minutes. Form input ignored for YouTube URLs.'
+                    ]);
                 }
             }
         }
+        
+        // If no YouTube URL or YouTube API failed, keep existing duration or use form input
+        // Note: Manual input should be in SECONDS (form label says "giây")
+        // Note: No longer calculating duration from video_path as we don't store direct video files
 
         // Set default duration to 0 if still not set
         if (!isset($validated['duration']) || $validated['duration'] == null) {
@@ -205,15 +377,44 @@ class LessonController extends Controller
 
         $lesson->update($validated);
 
-        return back()->with('success', 'Đã cập nhật bài học!');
+        // Convert HLS only if using local storage (not Cloudinary)
+        // Use background job to avoid blocking the request
+        if ($request->hasFile('video_file') && !empty($validated['_temp_video_path']) && empty($validated['cloudinary_id'])) {
+            // Dispatch to background job instead of running synchronously
+            ConvertVideoToHLS::dispatch($lesson, $validated['_temp_video_path'])
+                ->onQueue('default');
+            
+            Log::info('HLS conversion dispatched to background job (update)', [
+                'lesson_id' => $lesson->id,
+                'temp_path' => $validated['_temp_video_path'],
+            ]);
+        }
+
+        // Redirect to admin course edit page instead of back() to avoid showing success on public course page
+        $course = $lesson->section->course;
+        
+        // Update course total duration
+        $course->updateTotalDuration();
+        
+        return redirect()->route('admin.courses.edit', $course)->with('success', 'Đã cập nhật bài học!');
     }
 
     public function destroy(Lesson $lesson)
     {
         // Delete files if exist
-        if ($lesson->video_path) {
-            Storage::disk('public')->delete($lesson->video_path);
+        // Delete HLS files
+        if ($lesson->hls_path) {
+            $hlsConverter = new HLSConverter();
+            $hlsConverter->deleteHLSFiles(dirname($lesson->hls_path));
         }
+        // Delete Cloudinary video if exists
+        if ($lesson->cloudinary_id) {
+            $cloudinaryService = new CloudinaryService();
+            if ($cloudinaryService->isConfigured()) {
+                $cloudinaryService->deleteVideo($lesson->cloudinary_id);
+            }
+        }
+        // Delete attachment
         if ($lesson->attachment_path) {
             Storage::disk('public')->delete($lesson->attachment_path);
         }
@@ -222,9 +423,50 @@ class LessonController extends Controller
         $lesson->delete();
 
         // Update course video count
-        $course->decrement('video_count');
+        // $course->decrement('video_count');
+        $course->updateVideoCount();
+        
+        // Update course total duration
+        $course->updateTotalDuration();
 
-        return back()->with('success', 'Đã xóa bài học!');
+        // Redirect to admin course edit page instead of back() to avoid showing success on public course page
+        return redirect()->route('admin.courses.edit', $course)->with('success', 'Đã xóa bài học!');
+    }
+
+    /**
+     * Handle local HLS conversion (fallback when Cloudinary is not available)
+     * Uploads video temporarily, converts to HLS, then deletes original
+     */
+    private function handleLocalHLSConversion($request, &$validated)
+    {
+        if (!$request->hasFile('video_file')) {
+            return;
+        }
+
+        $videoFile = $request->file('video_file');
+        // Store temporarily for HLS conversion
+        $tempVideoPath = $videoFile->store('videos/lessons', 'public');
+        $storedPath = Storage::disk('public')->path($tempVideoPath);
+        
+        if ($storedPath && file_exists($storedPath)) {
+            // Calculate duration
+            $calculatedDuration = $this->getVideoDurationFromPath($storedPath);
+            if ($calculatedDuration > 0) {
+                $validated['duration'] = $calculatedDuration;
+                Log::info('Duration calculated from uploaded file (local HLS)', [
+                    'duration' => $calculatedDuration,
+                    'file' => $videoFile->getClientOriginalName(),
+                ]);
+            }
+            
+            // Convert to HLS (will be done after lesson is created)
+            // Store temp path for conversion
+            $validated['_temp_video_path'] = $tempVideoPath;
+        } else {
+            Log::warning('Stored video file not found for HLS conversion', [
+                'path' => $storedPath,
+            ]);
+        }
     }
 
     /**

@@ -142,13 +142,15 @@ class YouTubeService
             }
 
             // Parse ISO 8601 duration (e.g., PT1H2M10S)
+            // YouTube API returns duration in ISO 8601 format (PT1H2M10S = 1 hour 2 minutes 10 seconds)
+            // parseISO8601Duration() converts it to SECONDS
             $seconds = $this->parseISO8601Duration($duration);
-            $minutes = max(1, (int) ceil($seconds / 60)); // Convert to minutes, minimum 1
+            $minutes = max(1, (int) ceil($seconds / 60)); // Convert to minutes, minimum 1 (for display only)
             $formatted = $this->formatDuration($seconds);
 
             $result = [
-                'duration' => $minutes,
-                'seconds' => $seconds,
+                'duration' => $minutes,  // Minutes (for display/backward compatibility)
+                'seconds' => $seconds,    // SECONDS - this is what we store in database
                 'formatted' => $formatted,
                 'video_id' => $videoId,
             ];
@@ -158,8 +160,10 @@ class YouTubeService
 
             Log::info('YouTube duration retrieved successfully', [
                 'video_id' => $videoId,
-                'seconds' => $seconds,
-                'minutes' => $minutes
+                'iso8601_duration' => $duration,  // Raw ISO 8601 format from YouTube API
+                'seconds' => $seconds,            // Parsed to seconds
+                'minutes' => $minutes,            // Converted to minutes (for display)
+                'note' => 'Duration stored in database as SECONDS, not minutes'
             ]);
 
             return $result;

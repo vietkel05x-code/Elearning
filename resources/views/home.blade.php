@@ -3,6 +3,22 @@
 @section('title', 'Trang chủ')
 
 @section('content')
+@push('styles')
+<style>
+    .courses-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+    .course-tile{display:block;background:#fff;border:1px solid var(--color-border,#e5e7eb);border-radius:10px;overflow:hidden;transition:transform .2s,box-shadow .2s;color:inherit;text-decoration:none}
+    .course-tile:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.06)}
+    .course-tile__thumb{aspect-ratio:16/9;background:#f0f0f0}
+    .course-tile__thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .course-tile__body{padding:12px 14px}
+    .course-tile__title{font-weight:600;line-height:1.3;height:2.6em;overflow:hidden;margin-bottom:6px}
+    .course-tile__meta{font-size:13px;color:#6b7280;display:flex;gap:6px;align-items:center;margin-bottom:8px}
+    .course-tile__price{display:flex;gap:8px;align-items:baseline}
+    .course-tile__price .current{font-weight:700}
+    .course-tile__price .old{text-decoration:line-through;color:#9ca3af;font-size:13px}
+    .course-tile__price .free{color:var(--color-success,#10b981);font-weight:700}
+</style>
+@endpush
 <!-- HERO SECTION -->
 <section class="hero">
     <div class="hero-content">
@@ -97,7 +113,7 @@
                                     <h4>{{ $course->title }}</h4>
                                     <span class="badge">Bestseller</span>
                                     <p class="meta">
-                                        {{ $course->total_duration }} total hours · {{ ucfirst($course->level) }} · {{ ucfirst($course->language) }}
+                                        {{ $course->formatted_total_duration }} · {{ ucfirst($course->level) }} · {{ ucfirst($course->language) }}
                                     </p>
                                     <p class="desc">{{ $course->short_description }}</p>
                                     <ul>
@@ -155,64 +171,112 @@
     </div>
 </section>
 
-<!-- TESTIMONIALS SECTION -->
-<section class="testimonials-section">
+<!-- TRENDING COURSES (DB only) -->
+@if(isset($trendingCourses) && $trendingCourses->count())
+<section class="trending-section">
     <div class="page-wrapper">
-        <h2 style="text-align:center;margin-bottom:48px;font-size:32px;font-weight:700">Học viên nói gì về chúng tôi</h2>
-        <div class="testimonials-grid">
-            <div class="testimonial-card">
-                <div class="testimonial-rating">
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-size:28px;font-weight:700">Khóa học thịnh hành</h2>
+            <a href="{{ route('courses.index', ['sort' => 'students']) }}" class="cta-secondary">Xem tất cả</a>
+        </div>
+        <div class="courses-row">
+            @foreach($trendingCourses as $course)
+            <a class="course-tile" href="{{ route('courses.show', $course->slug) }}">
+                <div class="course-tile__thumb">
+                    <img src="{{ $course->thumbnail_url }}" alt="{{ $course->title }}">
                 </div>
-                <p class="testimonial-text">"E-Learning đã giúp tôi nâng cao kỹ năng và tìm được công việc mơ ước. Các khóa học rất chất lượng và dễ hiểu!"</p>
-                <div class="testimonial-author">
-                    <div class="author-avatar">N</div>
-                    <div class="author-info">
-                        <div class="author-name">Nguyễn Văn A</div>
-                        <div class="author-role">Software Developer</div>
+                <div class="course-tile__body">
+                    <div class="course-tile__title">{{ $course->title }}</div>
+                    <div class="course-tile__meta">
+                        <span>{{ number_format($course->rating, 1) }} ★ ({{ $course->rating_count }})</span>
+                        <span>·</span>
+                        <span>{{ $course->enrolled_students }} học viên</span>
+                    </div>
+                    <div class="course-tile__price">
+                        @if($course->price == 0)
+                            <span class="free">Miễn phí</span>
+                        @else
+                            <span class="current">₫{{ number_format($course->price, 0, ',', '.') }}</span>
+                            @if($course->compare_at_price)
+                                <span class="old">₫{{ number_format($course->compare_at_price, 0, ',', '.') }}</span>
+                            @endif
+                        @endif
                     </div>
                 </div>
-            </div>
-            <div class="testimonial-card">
-                <div class="testimonial-rating">
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                </div>
-                <p class="testimonial-text">"Nội dung khóa học rất thực tế và có thể áp dụng ngay vào công việc. Tôi đã học được rất nhiều điều bổ ích!"</p>
-                <div class="testimonial-author">
-                    <div class="author-avatar">T</div>
-                    <div class="author-info">
-                        <div class="author-name">Trần Thị B</div>
-                        <div class="author-role">Marketing Manager</div>
-                    </div>
-                </div>
-            </div>
-            <div class="testimonial-card">
-                <div class="testimonial-rating">
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                </div>
-                <p class="testimonial-text">"Giảng viên rất nhiệt tình và chuyên nghiệp. Tôi đã hoàn thành nhiều khóa học và rất hài lòng với chất lượng!"</p>
-                <div class="testimonial-author">
-                    <div class="author-avatar">L</div>
-                    <div class="author-info">
-                        <div class="author-name">Lê Văn C</div>
-                        <div class="author-role">Business Analyst</div>
-                    </div>
-                </div>
-            </div>
+            </a>
+            @endforeach
         </div>
     </div>
 </section>
+@endif
+
+<!-- NEWEST COURSES (DB only) -->
+@if(isset($newestCourses) && $newestCourses->count())
+<section class="newest-section">
+    <div class="page-wrapper">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-size:28px;font-weight:700">Khóa học mới nhất</h2>
+            <a href="{{ route('courses.index', ['sort' => 'latest']) }}" class="cta-secondary">Xem tất cả</a>
+        </div>
+        <div class="courses-row">
+            @foreach($newestCourses as $course)
+            <a class="course-tile" href="{{ route('courses.show', $course->slug) }}">
+                <div class="course-tile__thumb">
+                    <img src="{{ $course->thumbnail_url }}" alt="{{ $course->title }}">
+                </div>
+                <div class="course-tile__body">
+                    <div class="course-tile__title">{{ $course->title }}</div>
+                    <div class="course-tile__meta">
+                        <span>{{ number_format($course->rating, 1) }} ★ ({{ $course->rating_count }})</span>
+                        <span>·</span>
+                        <span>{{ $course->formatted_total_duration }}</span>
+                    </div>
+                    <div class="course-tile__price">
+                        @if($course->price == 0)
+                            <span class="free">Miễn phí</span>
+                        @else
+                            <span class="current">₫{{ number_format($course->price, 0, ',', '.') }}</span>
+                            @if($course->compare_at_price)
+                                <span class="old">₫{{ number_format($course->compare_at_price, 0, ',', '.') }}</span>
+                            @endif
+                        @endif
+                    </div>
+                </div>
+            </a>
+            @endforeach
+        </div>
+    </div>
+</section>
+@endif
+
+<!-- REVIEWS FROM DB (no fake) -->
+@if(isset($latestReviews) && $latestReviews->count())
+<section class="testimonials-section">
+    <div class="page-wrapper">
+        <h2 style="text-align:center;margin-bottom:48px;font-size:32px;font-weight:700">Nhận xét mới nhất</h2>
+        <div class="testimonials-grid">
+            @foreach($latestReviews as $review)
+            <div class="testimonial-card">
+                <div class="testimonial-rating">
+                    @for($i=1;$i<=5;$i++)
+                        <i class="fas fa-star{{ $i <= (int)$review->rating ? '' : '-o' }}"></i>
+                    @endfor
+                </div>
+                <p class="testimonial-text">{{ \Illuminate\Support\Str::limit($review->content, 180) }}</p>
+                <div class="testimonial-author">
+                    <div class="author-avatar">
+                        {{ strtoupper(substr($review->user->name ?? 'U',0,1)) }}
+                    </div>
+                    <div class="author-info">
+                        <div class="author-name">{{ $review->user->name ?? 'Người dùng' }}</div>
+                        <div class="author-role">Khoá: {{ $review->course->title ?? '' }}</div>
+                    </div>
+                </div>
+            </div>
+            @endforeach
+        </div>
+    </div>
+</section>
+@endif
 
 @endsection

@@ -6,11 +6,36 @@ class VideoHelper
 {
     /**
      * Extract YouTube video ID from URL
+     * Supports various formats:
+     * - https://www.youtube.com/watch?v=VIDEO_ID
+     * - https://www.youtube.com/watch?v=VIDEO_ID&list=...
+     * - https://youtu.be/VIDEO_ID
+     * - https://www.youtube.com/embed/VIDEO_ID
+     * - https://www.youtube.com/v/VIDEO_ID
      */
     public static function getYouTubeId($url)
     {
-        preg_match('/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/', $url, $matches);
-        return $matches[1] ?? null;
+        // First try to extract from v= parameter (most common format)
+        if (preg_match('/[?&]v=([a-zA-Z0-9_-]{11})/', $url, $matches)) {
+            return $matches[1];
+        }
+        
+        // Then try youtu.be format
+        if (preg_match('/youtu\.be\/([a-zA-Z0-9_-]{11})/', $url, $matches)) {
+            return $matches[1];
+        }
+        
+        // Then try embed/v format
+        if (preg_match('/youtube\.com\/(?:embed|v)\/([a-zA-Z0-9_-]{11})/', $url, $matches)) {
+            return $matches[1];
+        }
+        
+        // Fallback to original regex for edge cases
+        if (preg_match('/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/', $url, $matches)) {
+            return $matches[1];
+        }
+        
+        return null;
     }
 
     /**
@@ -132,24 +157,40 @@ class VideoHelper
      */
     public static function formatDuration($value)
     {
-        // Handle legacy format: if value is less than 7200 (2 hours in seconds),
-        // and when multiplied by 60 gives a reasonable duration (less than 10 hours),
-        // assume it's in minutes (old format)
-        // Otherwise assume it's in seconds (new format)
-        $totalSeconds = 0;
-        
         if ($value <= 0) {
             return '0:00';
         }
         
-        // Heuristic: if value * 60 < 72000 (10 hours), likely it's in minutes
-        // Otherwise, assume it's already in seconds
-        if ($value < 120 && ($value * 60) < 72000) {
-            // Legacy format: convert minutes to seconds
-            $totalSeconds = (int) round($value * 60);
-        } else {
-            // New format: already in seconds
+        $totalSeconds = 0;
+        
+        // Heuristic to detect legacy format (minutes) vs new format (seconds)
+        // Since we updated the code to store duration in seconds, we should assume
+        // values are in seconds. However, for backward compatibility with old data:
+        // - If value < 60: definitely seconds (no video is less than 1 minute in old format)
+        // - If value >= 60 and < 3600: could be seconds or minutes
+        //   - If value is a round number (divisible by 60) and < 600 (10 hours in minutes),
+        //     it might be legacy minutes format
+        //   - Otherwise, assume seconds
+        // - If value >= 3600: definitely seconds (would be 60+ hours if it were minutes)
+        
+        if ($value < 60) {
+            // Definitely seconds (less than 1 minute)
             $totalSeconds = (int) $value;
+        } elseif ($value >= 3600) {
+            // Definitely seconds (would be 60+ hours if minutes)
+            $totalSeconds = (int) $value;
+        } else {
+            // Between 60 and 3600: could be seconds or legacy minutes
+            // Check if it's a round number divisible by 60 and reasonable for minutes
+            // (e.g., 5, 10, 15, 30, 45, 60 minutes = 300, 600, 900, 1800, 2700, 3600 seconds)
+            // But also check: if value * 60 would be > 10 hours (36000 seconds), it's probably already seconds
+            if (($value % 60 == 0) && ($value * 60 < 36000) && ($value < 600)) {
+                // Likely legacy format: minutes (e.g., 5, 10, 15, 30, 45, 60)
+                $totalSeconds = (int) round($value * 60);
+            } else {
+                // Likely already in seconds
+                $totalSeconds = (int) $value;
+            }
         }
 
         $hours = floor($totalSeconds / 3600);

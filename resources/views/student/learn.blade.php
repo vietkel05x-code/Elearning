@@ -22,6 +22,11 @@
       
       <h2 class="learn-sidebar__title">Nội dung khóa học</h2>
       
+      <!-- Q&A Button -->
+      <a href="{{ route('questions.index', $course) }}" class="learn-sidebar__qa-btn" style="display: block; margin-bottom: 16px; padding: 10px; background: #f7f9fa; border: 1px solid #d1d7dc; border-radius: 4px; text-align: center; color: #1c1d1f; text-decoration: none; font-weight: 500;">
+        <i class="fas fa-comments"></i> Hỏi đáp (Q&A)
+      </a>
+      
       <!-- Course Progress -->
       <div class="learn-sidebar__progress">
         <div class="learn-sidebar__progress-header">
@@ -115,7 +120,7 @@
           </div>
           <div>
             <p class="learn-info__item-label">Thời lượng</p>
-            <p class="learn-info__item-value">{{ $course->total_duration }} giờ</p>
+            <p class="learn-info__item-value">{{ $course->formatted_total_duration }}</p>
           </div>
         </div>
 

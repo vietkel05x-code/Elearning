@@ -7,10 +7,10 @@
 .breadcrumb {
   max-width: 1400px;
   margin: 0 auto var(--spacing-lg);
-  padding: 0 var(--spacing-lg);
+  padding: var(--spacing-lg);
   display: flex;
   align-items: center;
-  font-size: var(--font-size-sm);
+  font-size: 13px;
   color: var(--color-text-secondary);
 }
 

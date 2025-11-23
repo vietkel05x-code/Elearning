@@ -12,7 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
+            'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class, // strict admin only
+            'instructor' => \App\Http\Middleware\EnsureUserIsInstructor::class,
+            'adminpanel' => \App\Http\Middleware\EnsureUserIsAdminOrInstructor::class, // shared panel access
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

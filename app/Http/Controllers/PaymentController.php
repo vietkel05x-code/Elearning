@@ -106,6 +106,14 @@ class PaymentController extends Controller
             // Update order status
             $order->update(['status' => 'paid']);
 
+            // Increment coupon usage if applicable
+            if ($order->coupon_id) {
+                $coupon = $order->coupon; // lazy load relation
+                if ($coupon && $coupon->isValid()) { // vẫn còn hợp lệ tại thời điểm thanh toán
+                    $coupon->incrementUsage();
+                }
+            }
+
             // Create payment record
             $payment = Payment::create([
                 'order_id' => $order->id,
@@ -168,7 +176,7 @@ class PaymentController extends Controller
             abort(403, 'Bạn không có quyền truy cập đơn hàng này.');
         }
 
-        // Create payment record with failed status
+        // Create payment record with failed status (không tăng uses coupon)
         Payment::create([
             'order_id' => $order->id,
             'provider' => $request->get('method', 'momo'),

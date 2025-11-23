@@ -47,16 +47,13 @@
         @enderror
       </div>
 
-      <!-- Email -->
+      <!-- Email (read-only) -->
       <div class="admin-profile-edit-form__field">
-        <label class="admin-profile-edit-form__label" for="email">Email *</label>
-        <input type="email" name="email" id="email" value="{{ old('email', $adminUser ? $adminUser->email : '') }}" required
-               class="admin-profile-edit-form__input">
-        @error('email')
-          <div class="admin-profile-edit-form__error">
-            <i class="fas fa-exclamation-circle"></i> {{ $message }}
-          </div>
-        @enderror
+        <label class="admin-profile-edit-form__label">Email</label>
+        <div class="admin-profile-edit-form__readonly" style="background:#f5f5f5;border:1px solid #ddd;padding:.65rem .75rem;border-radius:6px;font-size:.95rem;box-sizing:border-box;">
+          {{ $adminUser ? $adminUser->email : '' }}
+        </div>
+        <small class="admin-profile-edit-form__help">Email cố định để bảo mật. Liên hệ quản trị cấp cao nếu cần thay đổi.</small>
       </div>
 
       <!-- Current Password -->

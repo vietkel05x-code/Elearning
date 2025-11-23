@@ -8,7 +8,7 @@ use Illuminate\Support\Str;
 class Order extends Model
 {
     protected $fillable = [
-        'user_id', 'code', 'subtotal', 'discount', 'total', 'status',
+        'user_id', 'coupon_id', 'code', 'subtotal', 'discount', 'total', 'status',
     ];
 
     protected $casts = [
@@ -31,6 +31,11 @@ class Order extends Model
     public function payment()
     {
         return $this->hasOne(Payment::class);
+    }
+
+    public function coupon()
+    {
+        return $this->belongsTo(Coupon::class);
     }
 
     // Generate unique order code

@@ -7,6 +7,13 @@
 @endpush
 
 @section('content')
+@php
+  $breadcrumbItems = [
+    ['label' => 'Trang chủ', 'url' => route('home')],
+    ['label' => 'Khóa học']
+  ];
+@endphp
+@include('components.breadcrumb', ['items' => $breadcrumbItems])
 <section class="courses-page">
   <h1 class="courses-page__title">Khóa học</h1>
 
@@ -127,13 +134,19 @@
                 </div>
 
                 <div class="course-card__price">
-                  <span class="course-card__price-current">
-                    ₫{{ number_format($course->price, 0, ',', '.') }}
-                  </span>
-                  @if($course->compare_at_price)
-                    <span class="course-card__price-old">
-                      ₫{{ number_format($course->compare_at_price, 0, ',', '.') }}
+                  @if($course->price == 0)
+                    <span class="course-card__price-current" style="color: var(--color-success); font-weight: bold;">
+                      Miễn phí
                     </span>
+                  @else
+                    <span class="course-card__price-current">
+                      ₫{{ number_format($course->price, 0, ',', '.') }}
+                    </span>
+                    @if($course->compare_at_price)
+                      <span class="course-card__price-old">
+                        ₫{{ number_format($course->compare_at_price, 0, ',', '.') }}
+                      </span>
+                    @endif
                   @endif
                 </div>
               </div>

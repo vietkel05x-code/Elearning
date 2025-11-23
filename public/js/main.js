@@ -61,12 +61,14 @@ document.addEventListener("DOMContentLoaded", () => {
     if (img.complete) { if (--left === 0) { sizeViewport(); showSlide(currentSlide); } }
     else img.addEventListener('load', () => { if (--left === 0) { sizeViewport(); showSlide(currentSlide); }});
   });
-});
 
-    setInterval(() => {
-        currentSlide = (currentSlide + 1) % totalSlides;
-        showSlide(currentSlide);
-    }, 5000);
+  // Auto-advance slides every 5 seconds
+  const totalSlides = Math.ceil(cards.length / slidesToShow);
+  setInterval(() => {
+    currentSlide = (currentSlide + 1) % totalSlides;
+    showSlide(currentSlide);
+  }, 5000);
+});
 
 
 document.addEventListener("DOMContentLoaded", () => {

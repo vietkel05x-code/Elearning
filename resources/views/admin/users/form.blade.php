@@ -52,6 +52,7 @@
         <label for="role" class="admin-form__label">Vai trò *</label>
         <select name="role" id="role" required class="admin-form__select">
           <option value="student" {{ old('role', $user->role) == 'student' ? 'selected' : '' }}>Học viên</option>
+          <option value="instructor" {{ old('role', $user->role) == 'instructor' ? 'selected' : '' }}>Giảng viên</option>
           <option value="admin" {{ old('role', $user->role) == 'admin' ? 'selected' : '' }}>Quản trị</option>
         </select>
         <small class="admin-help-text">Chỉ có thể thay đổi vai trò của người dùng</small>
@@ -72,6 +73,7 @@
         <label for="role" class="admin-form__label">Vai trò *</label>
         <select name="role" id="role" required class="admin-form__select">
           <option value="student" {{ old('role', $user->role) == 'student' ? 'selected' : '' }}>Học viên</option>
+          <option value="instructor" {{ old('role', $user->role) == 'instructor' ? 'selected' : '' }}>Giảng viên</option>
           <option value="admin" {{ old('role', $user->role) == 'admin' ? 'selected' : '' }}>Quản trị</option>
         </select>
       </div>

@@ -30,7 +30,7 @@
     <div class="admin-form__field">
       <label for="code" class="admin-form__label">Mã giảm giá *</label>
       <input type="text" name="code" id="code" value="{{ old('code', $coupon->code) }}" required
-             class="admin-form__input admin-form-input--uppercase" placeholder="SUMMER2024">
+             class="admin-form__input admin-form-input--uppercase" placeholder="WINTER2025">
       <small class="admin-help-text">Mã sẽ được chuyển thành chữ hoa</small>
     </div>
 

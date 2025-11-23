@@ -16,24 +16,18 @@ class EnsureUserIsAdmin
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Kiểm tra đã đăng nhập admin chưa (dùng session key riêng)
         if (!$request->session()->has('admin_logged_in') || !$request->session()->get('admin_user_id')) {
-            return redirect()->route('admin.login')->with('error', 'Vui lòng đăng nhập để truy cập trang quản trị.');
+            return redirect()->route('admin.login')->with('error', 'Vui lòng đăng nhập để truy cập khu vực quản trị.');
         }
 
-        // Lấy user từ session
-        $adminUser = \App\Models\User::find($request->session()->get('admin_user_id'));
-
-        // Kiểm tra user tồn tại và là admin
-        if (!$adminUser || !$adminUser->isAdmin()) {
-            $request->session()->forget('admin_logged_in');
-            $request->session()->forget('admin_user_id');
-            return redirect()->route('admin.login')->with('error', 'Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.');
+        $panelUser = \App\Models\User::find($request->session()->get('admin_user_id'));
+        if (!$panelUser || (!$panelUser->isAdmin())) {
+            // Middleware này vẫn là strict admin; nếu user không phải admin thì chặn
+            return redirect()->route('admin.login')->with('error', 'Bạn không có quyền truy cập chức năng này.');
         }
 
-        // Set user vào request để sử dụng trong controller
-        $request->setUserResolver(function () use ($adminUser) {
-            return $adminUser;
+        $request->setUserResolver(function () use ($panelUser) {
+            return $panelUser;
         });
 
         return $next($request);

@@ -25,15 +25,15 @@ class ProfileController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
+            // email intentionally not editable
             'current_password' => 'nullable|required_with:new_password',
             'new_password' => 'nullable|min:8|confirmed',
             'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        // Update name and email
+        // Update name only (email locked)
         $user->name = $validated['name'];
-        $user->email = $validated['email'];
+        // If user tried to send a different email, ignore and optionally could log
 
         // Update password if provided
         if ($request->filled('new_password')) {

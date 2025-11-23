@@ -7,44 +7,6 @@ use App\Http\Controllers\AuthController;
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
 
-// Test Payment Config (chỉ dùng để debug, nên xóa sau khi test xong)
-Route::get('/test-payment/momo', [\App\Http\Controllers\TestPaymentController::class, 'testMomo'])->name('test.payment.momo');
-Route::get('/test-payment/vnpay', [\App\Http\Controllers\TestPaymentController::class, 'testVnpay'])->name('test.payment.vnpay');
-
-// Test Video Duration (chỉ dùng để debug)
-Route::get('/test-video-duration', function() {
-    $controller = new \App\Http\Controllers\Admin\LessonController();
-    $reflection = new \ReflectionClass($controller);
-    $method = $reflection->getMethod('findFFprobe');
-    $method->setAccessible(true);
-    $ffprobePath = $method->invoke($controller);
-    
-    // Test if ffprobe actually works
-    $ffprobeWorks = false;
-    if ($ffprobePath && file_exists($ffprobePath)) {
-        try {
-            $testCommand = escapeshellarg($ffprobePath) . ' -version 2>&1';
-            $output = @shell_exec($testCommand);
-            $ffprobeWorks = $output && strpos($output, 'ffprobe version') !== false;
-        } catch (\Exception $e) {
-            $ffprobeWorks = false;
-        }
-    }
-    
-    return response()->json([
-        'ffprobe_found' => !empty($ffprobePath) && file_exists($ffprobePath),
-        'ffprobe_works' => $ffprobeWorks,
-        'ffprobe_path' => $ffprobePath,
-        'shell_exec_enabled' => function_exists('shell_exec') && !ini_get('safe_mode'),
-        'getid3_available' => class_exists('\getID3'),
-        'message' => $ffprobeWorks 
-            ? 'FFprobe đã được tìm thấy và hoạt động! Hệ thống có thể tự động tính duration.' 
-            : ($ffprobePath 
-                ? 'FFprobe được tìm thấy nhưng không hoạt động. Kiểm tra lại đường dẫn: ' . $ffprobePath
-                : 'FFprobe chưa được cài đặt. Xem file VIDEO_DURATION_SETUP.md để cài đặt.')
-    ]);
-})->name('test.video.duration');
-
 Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/register', [AuthController::class, 'showRegisterForm'])->name('register');
@@ -72,6 +34,8 @@ Route::middleware('auth')->group(function () {
     
     Route::get('/checkout', [\App\Http\Controllers\CheckoutController::class, 'index'])->name('checkout.index');
     Route::post('/checkout', [\App\Http\Controllers\CheckoutController::class, 'process'])->name('checkout.process');
+    Route::get('/checkout/direct/{course}', [\App\Http\Controllers\CheckoutController::class, 'direct'])->name('checkout.direct');
+    Route::post('/checkout/direct/{course}', [\App\Http\Controllers\CheckoutController::class, 'processDirect'])->name('checkout.process-direct');
     Route::post('/checkout/apply-coupon', [\App\Http\Controllers\CheckoutController::class, 'applyCoupon'])->name('checkout.apply-coupon');
     Route::post('/checkout/remove-coupon', [\App\Http\Controllers\CheckoutController::class, 'removeCoupon'])->name('checkout.remove-coupon');
     
@@ -105,17 +69,36 @@ Route::middleware('auth')->group(function () {
     Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead'])->name('notifications.mark-read');
     Route::post('/notifications/mark-all-read', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
     Route::get('/notifications/count', [\App\Http\Controllers\NotificationController::class, 'count'])->name('notifications.count');
+    
+    // Questions & Answers (Student)
+    Route::get('/courses/{course}/questions', [\App\Http\Controllers\QuestionController::class, 'index'])->name('questions.index');
+    Route::get('/courses/{course}/questions/create', [\App\Http\Controllers\QuestionController::class, 'create'])->name('questions.create');
+    Route::post('/courses/{course}/questions', [\App\Http\Controllers\QuestionController::class, 'store'])->name('questions.store');
+    Route::get('/courses/{course}/questions/{question}', [\App\Http\Controllers\QuestionController::class, 'show'])->name('questions.show');
+    Route::post('/courses/{course}/questions/{question}/resolve', [\App\Http\Controllers\QuestionController::class, 'markResolved'])->name('questions.resolve');
+    Route::post('/courses/{course}/questions/{question}/answers/{answer}/best', [\App\Http\Controllers\QuestionController::class, 'selectBestAnswer'])->name('questions.select-best');
+    Route::delete('/courses/{course}/questions/{question}', [\App\Http\Controllers\QuestionController::class, 'destroy'])->name('questions.destroy');
 });
 
-// Admin - Đăng nhập riêng
+// Admin Panel - includes admin & instructor limited access
 Route::prefix('admin')->name('admin.')->group(function () {
     // Admin Auth Routes (không cần middleware)
     Route::get('/login', [\App\Http\Controllers\Admin\AuthController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [\App\Http\Controllers\Admin\AuthController::class, 'login']);
     Route::post('/logout', [\App\Http\Controllers\Admin\AuthController::class, 'logout'])->name('logout');
     
-    // Admin Protected Routes - Yêu cầu đăng nhập và role admin
-    // Sử dụng middleware 'admin' thay vì 'auth' để tránh redirect về login public
+    // Shared Panel Routes (admin + instructor)
+    Route::middleware('adminpanel')->group(function () {
+        // Q&A limited access for instructor or admin
+        Route::get('/questions', [\App\Http\Controllers\Admin\QuestionController::class, 'index'])->name('questions.index');
+        Route::get('/questions/{question}', [\App\Http\Controllers\Admin\QuestionController::class, 'show'])->name('questions.show');
+        Route::delete('/questions/{question}', [\App\Http\Controllers\Admin\QuestionController::class, 'destroy'])->name('questions.destroy');
+        Route::delete('/answers/{answer}', [\App\Http\Controllers\Admin\QuestionController::class, 'destroyAnswer'])->name('answers.destroy');
+        Route::post('/questions/{question}/answer', [\App\Http\Controllers\Admin\QuestionController::class, 'answer'])->name('questions.answer');
+        Route::put('/answers/{answer}', [\App\Http\Controllers\Admin\QuestionController::class, 'updateAnswer'])->name('answers.update');
+    });
+
+    // Strict Admin Only Routes
     Route::middleware('admin')->group(function () {
         // Dashboard
         Route::get('/', [\App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
@@ -152,7 +135,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('/reviews', [\App\Http\Controllers\Admin\ReviewController::class, 'index'])->name('reviews.index');
     Route::delete('/reviews/{review}', [\App\Http\Controllers\Admin\ReviewController::class, 'destroy'])->name('reviews.destroy');
     
-    // Users
+    // Users (admin only)
     Route::get('/users', [\App\Http\Controllers\Admin\UserController::class, 'index'])->name('users.index');
     Route::get('/users/create', [\App\Http\Controllers\Admin\UserController::class, 'create'])->name('users.create');
     Route::post('/users', [\App\Http\Controllers\Admin\UserController::class, 'store'])->name('users.store');
@@ -182,6 +165,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::post('/notifications', [\App\Http\Controllers\Admin\NotificationController::class, 'store'])->name('notifications.store');
     Route::get('/notifications/{notification}', [\App\Http\Controllers\Admin\NotificationController::class, 'show'])->name('notifications.show');
     Route::delete('/notifications/{notification}', [\App\Http\Controllers\Admin\NotificationController::class, 'destroy'])->name('notifications.destroy');
+    
+    // (Q&A routes are registered in the shared admin panel group above)
     
     // Statistics
     Route::get('/statistics/revenue', [\App\Http\Controllers\Admin\StatisticsController::class, 'revenue'])->name('statistics.revenue');

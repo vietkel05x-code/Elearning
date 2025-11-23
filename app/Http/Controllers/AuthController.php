@@ -62,8 +62,11 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         Auth::logout();
-        $request->session()->invalidate();
+        
+        // Chỉ regenerate token, không invalidate toàn bộ session
+        // Điều này giữ lại session admin nếu có
         $request->session()->regenerateToken();
+        
         return redirect('/');
     }
 }

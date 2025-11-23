@@ -13,6 +13,7 @@ use App\Models\LessonProgress;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use App\Models\Lesson;
 
 class StatisticsController extends Controller
 {
@@ -182,9 +183,11 @@ class StatisticsController extends Controller
             $completedLessons = $student->lessonProgress()->where(function($q) {
                 $q->where('is_completed', true)->orWhereNotNull('completed_at');
             })->count();
-            $totalLessons = LessonProgress::whereIn('user_id', [$student->id])
-                ->distinct('lesson_id')
-                ->count();
+            $courseIds = $student->enrollments()->pluck('course_id');
+            $totalLessons = \App\Models\Lesson::whereHas('section', function($q) use ($courseIds) {
+                    $q->whereIn('course_id', $courseIds);
+                })->count();
+
             
             $completionRate = $totalLessons > 0 ? round(($completedLessons / $totalLessons) * 100, 2) : 0;
             

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="vi" class="admin-html">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?php echo $__env->yieldContent('title', 'Admin Panel'); ?> - E-Learning</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="<?php echo e(asset('css/admin/admin.css')); ?>">
+    <?php echo $__env->yieldPushContent('styles'); ?>
+</head>
+<body class="admin-body">
+    <div class="admin-container">
+        <!-- Sidebar -->
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="logo-icon">E</div>
+                    <span>Admin Panel</span>
+                </div>
+            </div>
+            <?php ($panelUser = \App\Helpers\AdminHelper::user()); ?>
+            <nav class="sidebar-menu">
+                <?php if($panelUser && $panelUser->role === 'admin'): ?>
+                    <div class="menu-section">
+                        <div class="menu-section-title">Chính</div>
+                        <a href="<?php echo e(route('admin.dashboard')); ?>" class="menu-item <?php echo e(request()->routeIs('admin.dashboard') ? 'active' : ''); ?>">
+                            <i class="fas fa-home"></i>
+                            <span>Bảng điều khiển</span>
+                        </a>
+                    </div>
+
+                    <div class="menu-section">
+                        <div class="menu-section-title">Quản lý nội dung</div>
+                        <a href="<?php echo e(route('admin.courses.index')); ?>" class="menu-item <?php echo e(request()->routeIs('admin.courses.*') ? 'active' : ''); ?>">
+                            <i class="fas fa-book"></i>
+                            <span>Khóa học</span>
+                        </a>
+                        <a href="<?php echo e(route('admin.categories.index')); ?>" class="menu-item <?php echo e(request()->routeIs('admin.categories.*') ? 'active' : ''); ?>">
+                            <i class="fas fa-folder"></i>
+                            <span>Danh mục</span>
+                        </a>
+                        <a href="<?php echo e(route('admin.reviews.index')); ?>" class="menu-item <?php echo e(request()->routeIs('admin.reviews.*') ? 'active' : ''); ?>">
+                            <i class="fas fa-star"></i>
+                            <span>Đánh giá</span>
+                        </a>
+                    </div>
+
+                    <div class="menu-section">
+                        <div class="menu-section-title">Quản lý người dùng</div>
+                        <a href="<?php echo e(route('admin.users.index')); ?>" class="menu-item <?php echo e(request()->routeIs('admin.users.*') ? 'active' : ''); ?>">
+                            <i class="fas fa-users"></i>
+                            <span>Người dùng</span>
+                        </a>
+                        <a href="<?php echo e(route('admin.questions.index')); ?>" class="menu-item <?php echo e(request()->routeIs('admin.questions.*') ? 'active' : ''); ?>">
+                            <i class="fas fa-comments"></i>
+                            <span>Hỏi đáp (Q&A)</span>
+                        </a>
+                        <a href="<?php echo e(route('admin.notifications.index')); ?>" class="menu-item <?php echo e(request()->routeIs('admin.notifications.*') ? 'active' : ''); ?>">
+                            <i class="fas fa-bell"></i>
+                            <span>Thông báo</span>
+                        </a>
+                    </div>
+
+                    <div class="menu-section">
+                        <div class="menu-section-title">Bán hàng</div>
+                        <a href="<?php echo e(route('admin.coupons.index')); ?>" class="menu-item <?php echo e(request()->routeIs('admin.coupons.*') ? 'active' : ''); ?>">
+                            <i class="fas fa-tag"></i>
+                            <span>Mã giảm giá</span>
+                        </a>
+                    </div>
+
+                    <div class="menu-section">
+                        <div class="menu-section-title">Thống kê</div>
+                        <a href="<?php echo e(route('admin.statistics.revenue')); ?>" class="menu-item <?php echo e(request()->routeIs('admin.statistics.revenue') ? 'active' : ''); ?>">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Doanh thu</span>
+                        </a>
+                        <a href="<?php echo e(route('admin.statistics.courses')); ?>" class="menu-item <?php echo e(request()->routeIs('admin.statistics.courses') ? 'active' : ''); ?>">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Khóa học</span>
+                        </a>
+                        <a href="<?php echo e(route('admin.statistics.students')); ?>" class="menu-item <?php echo e(request()->routeIs('admin.statistics.students') ? 'active' : ''); ?>">
+                            <i class="fas fa-chart-pie"></i>
+                            <span>Người học</span>
+                        </a>
+                    </div>
+                <?php elseif($panelUser && $panelUser->role === 'instructor'): ?>
+                    <div class="menu-section">
+                        <div class="menu-section-title">Hỏi đáp</div>
+                        <a href="<?php echo e(route('admin.questions.index')); ?>" class="menu-item <?php echo e(request()->routeIs('admin.questions.*') ? 'active' : ''); ?>">
+                            <i class="fas fa-comments"></i>
+                            <span>Q&A Khóa học</span>
+                        </a>
+                    </div>
+                <?php endif; ?>
+
+                <div class="menu-section">
+                    <div class="menu-section-title">Khác</div>
+                    <a href="<?php echo e(route('home')); ?>" class="menu-item">
+                        <i class="fas fa-globe"></i>
+                        <span>Về trang chủ</span>
+                    </a>
+                    <form action="<?php echo e(route('admin.logout')); ?>" method="POST" class="admin-logout-form">
+                        <?php echo csrf_field(); ?>
+                        <button type="submit" class="menu-item">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Đăng xuất</span>
+                        </button>
+                    </form>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <!-- Header -->
+            <header class="admin-header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="menuToggle">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h1 class="page-title"><?php echo $__env->yieldContent('page-title', 'Bảng điều khiển'); ?></h1>
+                </div>
+                <div class="header-right">
+                    <div class="header-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Tìm kiếm...">
+                    </div>
+                    <div class="header-actions">
+                        <a href="<?php echo e(route('notifications.index')); ?>" class="header-icon">
+                            <i class="fas fa-bell"></i>
+                        </a>
+                        <a href="<?php echo e(\App\Helpers\AdminHelper::user() && \App\Helpers\AdminHelper::user()->role === 'admin' ? route('admin.profile.show') : '#'); ?>" class="user-profile">
+                            <div class="user-avatar">
+                                <?php echo e(\App\Helpers\AdminHelper::user() ? strtoupper(substr(\App\Helpers\AdminHelper::user()->name, 0, 1)) : 'A'); ?>
+
+                            </div>
+                            <div class="user-info">
+                                <div class="user-name"><?php echo e(\App\Helpers\AdminHelper::user() ? \App\Helpers\AdminHelper::user()->name : 'Admin'); ?></div>
+                                <div class="user-role">
+                                    <?php if(\App\Helpers\AdminHelper::user() && \App\Helpers\AdminHelper::user()->role === 'admin'): ?>
+                                        Quản trị viên
+                                    <?php elseif(\App\Helpers\AdminHelper::user() && \App\Helpers\AdminHelper::user()->role === 'instructor'): ?>
+                                        Giảng viên
+                                    <?php else: ?>
+                                        Administrator
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content -->
+            <div class="admin-content">
+                <?php if(session('success')): ?>
+                    <div class="admin-session-message admin-session-message--success">
+                        <i class="fas fa-check-circle"></i> <?php echo e(session('success')); ?>
+
+                    </div>
+                <?php endif; ?>
+
+                <?php if(session('error')): ?>
+                    <div class="admin-session-message admin-session-message--error">
+                        <i class="fas fa-exclamation-circle"></i> <?php echo e(session('error')); ?>
+
+                    </div>
+                <?php endif; ?>
+
+                <?php if($errors->any()): ?>
+                    <div class="admin-session-message admin-session-message--warning">
+                        <strong><i class="fas fa-exclamation-triangle"></i> Có lỗi xảy ra:</strong>
+                        <ul class="admin-session-message__list">
+                            <?php $__currentLoopData = $errors->all(); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $error): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                <li><?php echo e($error); ?></li>
+                            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                        </ul>
+                    </div>
+                <?php endif; ?>
+
+                <?php echo $__env->yieldContent('content'); ?>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Mobile menu toggle
+        document.getElementById('menuToggle')?.addEventListener('click', function() {
+            document.getElementById('sidebar').classList.toggle('open');
+        });
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(e) {
+            const sidebar = document.getElementById('sidebar');
+            const menuToggle = document.getElementById('menuToggle');
+            
+            if (window.innerWidth <= 768 && 
+                sidebar.classList.contains('open') && 
+                !sidebar.contains(e.target) && 
+                !menuToggle.contains(e.target)) {
+                sidebar.classList.remove('open');
+            }
+        });
+    </script>
+    <?php echo $__env->yieldPushContent('scripts'); ?>
+</body>
+</html>
+<?php /**PATH D:\elearning\resources\views/layouts/admin.blade.php ENDPATH**/ ?>

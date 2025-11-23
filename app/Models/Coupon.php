@@ -45,4 +45,13 @@ class Coupon extends Model
         
         return min($this->value, $amount);
     }
+
+    public function incrementUsage(): void
+    {
+        // Chỉ tăng nếu còn trong giới hạn (an toàn cạnh tranh)
+        if ($this->max_uses && $this->uses >= $this->max_uses) {
+            return; // đã đạt tối đa
+        }
+        $this->increment('uses');
+    }
 }

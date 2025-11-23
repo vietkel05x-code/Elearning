@@ -31,9 +31,20 @@
         @endforeach
       </div>
 
-      <a href="{{ route('cart.index') }}" class="checkout-order__back-link">
-        ← Quay lại giỏ hàng
-      </a>
+      @php
+        $isDirectCheckout = session()->has('direct_checkout_course');
+        $directCourseId = session()->get('direct_checkout_course');
+      @endphp
+      
+      @if(!$isDirectCheckout)
+        <a href="{{ route('cart.index') }}" class="checkout-order__back-link">
+          ← Quay lại giỏ hàng
+        </a>
+      @else
+        <a href="{{ route('courses.show', $courses[0]->slug) }}" class="checkout-order__back-link">
+          ← Quay lại khóa học
+        </a>
+      @endif
     </div>
 
     <!-- Payment Summary -->
@@ -108,7 +119,12 @@
           </div>
         </div>
 
-        <form action="{{ route('checkout.process') }}" method="POST" id="checkoutForm">
+        @php
+          $isDirectCheckout = session()->has('direct_checkout_course');
+          $directCourse = $isDirectCheckout ? $courses[0] : null;
+        @endphp
+        
+        <form action="{{ $isDirectCheckout ? route('checkout.process-direct', $directCourse->id) : route('checkout.process') }}" method="POST" id="checkoutForm">
           @csrf
           
           <!-- Payment Method Selection -->

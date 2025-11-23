@@ -149,6 +149,7 @@
   font-size: 15px;
   transition: all var(--transition-base);
   outline: none;
+  box-sizing: border-box;
 }
 
 .admin-profile-edit-form__input:focus {

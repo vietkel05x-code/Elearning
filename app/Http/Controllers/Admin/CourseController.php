@@ -5,18 +5,29 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 // use Mews\Purifier\Facades\Purifier; // nếu bạn cài purifier
 
 class CourseController extends Controller
 {
     public function create()
     {
-        return view('admin.courses.form', ['course' => new Course()]);
+        $categories = \App\Models\Category::orderBy('name')->get();
+        $instructors = \App\Models\User::where('role', 'instructor')
+            ->orWhere('role', 'admin')
+            ->orderBy('name')
+            ->get();
+        return view('admin.courses.form', [
+            'course' => new Course(),
+            'categories' => $categories,
+            'instructors' => $instructors
+        ]);
     }
 
     public function index(Request $request)
     {
-        $query = \App\Models\Course::query();
+        $query = \App\Models\Course::with('category');
         
         // Search
         if ($request->filled('search')) {
@@ -32,8 +43,15 @@ class CourseController extends Controller
             $query->where('status', $request->status);
         }
         
+        // Filter by category
+        if ($request->filled('category')) {
+            $query->where('category_id', $request->category);
+        }
+        
         $courses = $query->latest()->paginate(10)->withQueryString();
-        return view('admin.courses.index', compact('courses'));
+        $categories = \App\Models\Category::orderBy('name')->get();
+        
+        return view('admin.courses.index', compact('courses', 'categories'));
     }
  
 
@@ -42,9 +60,12 @@ class CourseController extends Controller
         $data = $request->validate([
             'title'            => 'required|string|max:255',
             'slug'             => 'required|string|max:255|unique:courses,slug',
+            'category_id'      => 'nullable|exists:categories,id',
+            'instructor_id'    => 'nullable|exists:users,id',
             'price'            => 'nullable|numeric',
             'compare_at_price' => 'nullable|numeric',
-            'thumbnail_path'   => 'nullable|string',
+            // Upload thumbnail via file input
+            'thumbnail_file'   => 'nullable|image|mimes:jpg,jpeg,png,gif,webp|max:4096',
             'status'           => 'required|string|in:draft,published,hidden,archived',
             'level'            => 'nullable|string',
             'language'         => 'nullable|string',
@@ -55,6 +76,20 @@ class CourseController extends Controller
 
         // Nếu dùng purifier:
         // $data['description_html'] = Purifier::clean($data['description_html'] ?? '');
+
+        // Handle thumbnail upload
+        if ($request->hasFile('thumbnail_file')) {
+            $file = $request->file('thumbnail_file');
+            $nameBase = Str::slug($data['title'] ?? pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
+            $filename = $nameBase . '-' . time() . '.' . $file->getClientOriginalExtension();
+            $destination = public_path('img/courses');
+            if (! File::exists($destination)) {
+                File::makeDirectory($destination, 0755, true);
+            }
+            $file->move($destination, $filename);
+            $data['thumbnail_path'] = $filename;
+            unset($data['thumbnail_file']);
+        }
 
         $course = Course::create($data);
         return redirect()->route('admin.courses.edit', $course)->with('ok', 'Đã tạo khóa học');
@@ -70,7 +105,12 @@ class CourseController extends Controller
                 $query->orderBy('position');
             }
         ]);
-        return view('admin.courses.form', compact('course'));
+        $categories = \App\Models\Category::orderBy('name')->get();
+        $instructors = \App\Models\User::where('role', 'instructor')
+            ->orWhere('role', 'admin')
+            ->orderBy('name')
+            ->get();
+        return view('admin.courses.form', compact('course', 'categories', 'instructors'));
     }
 
     public function update(Request $request, Course $course)
@@ -78,9 +118,12 @@ class CourseController extends Controller
         $data = $request->validate([
             'title'            => 'required|string|max:255',
             'slug'             => 'required|string|max:255|unique:courses,slug,' . $course->id,
+            'category_id'      => 'nullable|exists:categories,id',
+            'instructor_id'    => 'nullable|exists:users,id',
             'price'            => 'nullable|numeric',
             'compare_at_price' => 'nullable|numeric',
-            'thumbnail_path'   => 'nullable|string',
+            // Upload thumbnail via file input
+            'thumbnail_file'   => 'nullable|image|mimes:jpg,jpeg,png,gif,webp|max:4096',
             'status'           => 'required|string|in:draft,published,hidden,archived',
             'level'            => 'nullable|string',
             'language'         => 'nullable|string',
@@ -90,6 +133,29 @@ class CourseController extends Controller
         ]);
 
         // $data['description_html'] = Purifier::clean($data['description_html'] ?? '');
+
+        // Handle thumbnail upload
+        if ($request->hasFile('thumbnail_file')) {
+            $file = $request->file('thumbnail_file');
+            $nameBase = Str::slug($data['title'] ?? pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
+            $filename = $nameBase . '-' . time() . '.' . $file->getClientOriginalExtension();
+            $destination = public_path('img/courses');
+            if (! File::exists($destination)) {
+                File::makeDirectory($destination, 0755, true);
+            }
+            $file->move($destination, $filename);
+
+            // Delete old thumbnail if exists
+            if (! empty($course->thumbnail_path)) {
+                $old = public_path('img/courses/' . $course->thumbnail_path);
+                if (File::exists($old)) {
+                    @File::delete($old);
+                }
+            }
+
+            $data['thumbnail_path'] = $filename;
+            unset($data['thumbnail_file']);
+        }
 
         $course->update($data);
         return back()->with('ok', 'Đã lưu thay đổi');

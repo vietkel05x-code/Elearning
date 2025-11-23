@@ -18,73 +18,81 @@
                     <span>Admin Panel</span>
                 </div>
             </div>
+            @php($panelUser = \App\Helpers\AdminHelper::user())
             <nav class="sidebar-menu">
-                <div class="menu-section">
-                    <div class="menu-section-title">Chính</div>
-                    <a href="{{ route('admin.dashboard') }}" class="menu-item {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
-                        <i class="fas fa-home"></i>
-                        <span>Bảng điều khiển</span>
-                    </a>
-                </div>
+                @if($panelUser && $panelUser->role === 'admin')
+                    <div class="menu-section">
+                        <div class="menu-section-title">Chính</div>
+                        <a href="{{ route('admin.dashboard') }}" class="menu-item {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
+                            <i class="fas fa-home"></i>
+                            <span>Bảng điều khiển</span>
+                        </a>
+                    </div>
 
-                <div class="menu-section">
-                    <div class="menu-section-title">Quản lý nội dung</div>
-                    <a href="{{ route('admin.courses.index') }}" class="menu-item {{ request()->routeIs('admin.courses.*') ? 'active' : '' }}">
-                        <i class="fas fa-book"></i>
-                        <span>Khóa học</span>
-                    </a>
-                    <a href="{{ route('admin.categories.index') }}" class="menu-item {{ request()->routeIs('admin.categories.*') ? 'active' : '' }}">
-                        <i class="fas fa-folder"></i>
-                        <span>Danh mục</span>
-                    </a>
-                    <a href="{{ route('admin.reviews.index') }}" class="menu-item {{ request()->routeIs('admin.reviews.*') ? 'active' : '' }}">
-                        <i class="fas fa-star"></i>
-                        <span>Đánh giá</span>
-                    </a>
-                </div>
+                    <div class="menu-section">
+                        <div class="menu-section-title">Quản lý nội dung</div>
+                        <a href="{{ route('admin.courses.index') }}" class="menu-item {{ request()->routeIs('admin.courses.*') ? 'active' : '' }}">
+                            <i class="fas fa-book"></i>
+                            <span>Khóa học</span>
+                        </a>
+                        <a href="{{ route('admin.categories.index') }}" class="menu-item {{ request()->routeIs('admin.categories.*') ? 'active' : '' }}">
+                            <i class="fas fa-folder"></i>
+                            <span>Danh mục</span>
+                        </a>
+                        <a href="{{ route('admin.reviews.index') }}" class="menu-item {{ request()->routeIs('admin.reviews.*') ? 'active' : '' }}">
+                            <i class="fas fa-star"></i>
+                            <span>Đánh giá</span>
+                        </a>
+                    </div>
 
-                <div class="menu-section">
-                    <div class="menu-section-title">Quản lý người dùng</div>
-                    <a href="{{ route('admin.users.index') }}" class="menu-item {{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
-                        <i class="fas fa-users"></i>
-                        <span>Người dùng</span>
-                    </a>
-                    <a href="{{ route('admin.notifications.index') }}" class="menu-item {{ request()->routeIs('admin.notifications.*') ? 'active' : '' }}">
-                        <i class="fas fa-bell"></i>
-                        <span>Thông báo</span>
-                        @php
-                            $adminUser = \App\Helpers\AdminHelper::user();
-                            $unreadCount = $adminUser ? $adminUser->unreadNotificationsCount() : 0;
-                        @endphp
-                        @if($unreadCount > 0)
-                            <span class="menu-badge">{{ $unreadCount > 9 ? '9+' : $unreadCount }}</span>
-                        @endif
-                    </a>
-                </div>
+                    <div class="menu-section">
+                        <div class="menu-section-title">Quản lý người dùng</div>
+                        <a href="{{ route('admin.users.index') }}" class="menu-item {{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
+                            <i class="fas fa-users"></i>
+                            <span>Người dùng</span>
+                        </a>
+                        <a href="{{ route('admin.questions.index') }}" class="menu-item {{ request()->routeIs('admin.questions.*') ? 'active' : '' }}">
+                            <i class="fas fa-comments"></i>
+                            <span>Hỏi đáp (Q&A)</span>
+                        </a>
+                        <a href="{{ route('admin.notifications.index') }}" class="menu-item {{ request()->routeIs('admin.notifications.*') ? 'active' : '' }}">
+                            <i class="fas fa-bell"></i>
+                            <span>Thông báo</span>
+                        </a>
+                    </div>
 
-                <div class="menu-section">
-                    <div class="menu-section-title">Bán hàng</div>
-                    <a href="{{ route('admin.coupons.index') }}" class="menu-item {{ request()->routeIs('admin.coupons.*') ? 'active' : '' }}">
-                        <i class="fas fa-tag"></i>
-                        <span>Mã giảm giá</span>
-                    </a>
-                </div>
+                    <div class="menu-section">
+                        <div class="menu-section-title">Bán hàng</div>
+                        <a href="{{ route('admin.coupons.index') }}" class="menu-item {{ request()->routeIs('admin.coupons.*') ? 'active' : '' }}">
+                            <i class="fas fa-tag"></i>
+                            <span>Mã giảm giá</span>
+                        </a>
+                    </div>
 
-                <div class="menu-section">
-                    <div class="menu-section-title">Thống kê</div>
-                    <a href="{{ route('admin.statistics.revenue') }}" class="menu-item {{ request()->routeIs('admin.statistics.revenue') ? 'active' : '' }}">
-                        <i class="fas fa-chart-line"></i>
-                        <span>Doanh thu</span>
-                    </a>
-                    <a href="{{ route('admin.statistics.courses') }}" class="menu-item {{ request()->routeIs('admin.statistics.courses') ? 'active' : '' }}">
-                        <i class="fas fa-chart-bar"></i>
-                        <span>Khóa học</span>
-                    </a>
-                    <a href="{{ route('admin.statistics.students') }}" class="menu-item {{ request()->routeIs('admin.statistics.students') ? 'active' : '' }}">
-                        <i class="fas fa-chart-pie"></i>
-                        <span>Người học</span>
-                    </a>
-                </div>
+                    <div class="menu-section">
+                        <div class="menu-section-title">Thống kê</div>
+                        <a href="{{ route('admin.statistics.revenue') }}" class="menu-item {{ request()->routeIs('admin.statistics.revenue') ? 'active' : '' }}">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Doanh thu</span>
+                        </a>
+                        <a href="{{ route('admin.statistics.courses') }}" class="menu-item {{ request()->routeIs('admin.statistics.courses') ? 'active' : '' }}">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Khóa học</span>
+                        </a>
+                        <a href="{{ route('admin.statistics.students') }}" class="menu-item {{ request()->routeIs('admin.statistics.students') ? 'active' : '' }}">
+                            <i class="fas fa-chart-pie"></i>
+                            <span>Người học</span>
+                        </a>
+                    </div>
+                @elseif($panelUser && $panelUser->role === 'instructor')
+                    <div class="menu-section">
+                        <div class="menu-section-title">Hỏi đáp</div>
+                        <a href="{{ route('admin.questions.index') }}" class="menu-item {{ request()->routeIs('admin.questions.*') ? 'active' : '' }}">
+                            <i class="fas fa-comments"></i>
+                            <span>Q&A Khóa học</span>
+                        </a>
+                    </div>
+                @endif
 
                 <div class="menu-section">
                     <div class="menu-section-title">Khác</div>
@@ -121,24 +129,22 @@
                     <div class="header-actions">
                         <a href="{{ route('notifications.index') }}" class="header-icon">
                             <i class="fas fa-bell"></i>
-                            @php
-                                $adminUser = \App\Helpers\AdminHelper::user();
-                                $unreadCount = $adminUser ? $adminUser->unreadNotificationsCount() : 0;
-                            @endphp
-                            @if($unreadCount > 0)
-                                <span class="badge">{{ $unreadCount > 9 ? '9+' : $unreadCount }}</span>
-                            @endif
                         </a>
-                        <a href="{{ route('admin.profile.show') }}" class="user-profile">
-                            @php
-                                $adminUser = \App\Helpers\AdminHelper::user();
-                            @endphp
+                        <a href="{{ \App\Helpers\AdminHelper::user() && \App\Helpers\AdminHelper::user()->role === 'admin' ? route('admin.profile.show') : '#' }}" class="user-profile">
                             <div class="user-avatar">
-                                {{ $adminUser ? strtoupper(substr($adminUser->name, 0, 1)) : 'A' }}
+                                {{ \App\Helpers\AdminHelper::user() ? strtoupper(substr(\App\Helpers\AdminHelper::user()->name, 0, 1)) : 'A' }}
                             </div>
                             <div class="user-info">
-                                <div class="user-name">{{ $adminUser ? $adminUser->name : 'Admin' }}</div>
-                                <div class="user-role">Administrator</div>
+                                <div class="user-name">{{ \App\Helpers\AdminHelper::user() ? \App\Helpers\AdminHelper::user()->name : 'Admin' }}</div>
+                                <div class="user-role">
+                                    @if(\App\Helpers\AdminHelper::user() && \App\Helpers\AdminHelper::user()->role === 'admin')
+                                        Quản trị viên
+                                    @elseif(\App\Helpers\AdminHelper::user() && \App\Helpers\AdminHelper::user()->role === 'instructor')
+                                        Giảng viên
+                                    @else
+                                        Administrator
+                                    @endif
+                                </div>
                             </div>
                         </a>
                     </div>

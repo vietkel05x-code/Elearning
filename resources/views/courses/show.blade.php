@@ -7,6 +7,17 @@
 @endpush
 
 @section('content')
+@php
+  $breadcrumbItems = [
+    ['label' => 'Trang chủ', 'url' => route('home')],
+    ['label' => 'Khóa học', 'url' => route('courses.index')],
+  ];
+  if($course->category) {
+    $breadcrumbItems[] = ['label' => $course->category->name, 'url' => route('courses.index', ['category' => $course->category->id])];
+  }
+  $breadcrumbItems[] = ['label' => $course->title];
+@endphp
+@include('components.breadcrumb', ['items' => $breadcrumbItems])
 <section class="course-detail-page">
   @if(session('success'))
     <div class="alert alert--success">{{ session('success') }}</div>
@@ -33,7 +44,7 @@
         <span class="course-detail__meta-separator">·</span>
         <span class="course-detail__meta-item">{{ $course->enrolled_students }} học viên</span>
         <span class="course-detail__meta-separator">·</span>
-        <span class="course-detail__meta-item">{{ $course->total_duration }} giờ</span>
+        <span class="course-detail__meta-item">{{ $course->formatted_total_duration }}</span>
       </div>
 
       <div class="course-detail__level">
@@ -136,9 +147,9 @@
                   @csrf
                   <div style="margin-bottom: var(--spacing-md);">
                     <label style="display: block; margin-bottom: var(--spacing-sm); font-weight: bold;">Đánh giá *</label>
-                    <div class="course-reviews__stars" id="ratingStars">
+                    <div class="course-reviews__stars" id="ratingStars" onmouseleave="resetStars()">
                       @for($i = 1; $i <= 5; $i++)
-                        <i class="fa fa-star-o course-reviews__star" data-rating="{{ $i }}" onmouseover="hoverStar({{ $i }})" onclick="selectRating({{ $i }})"></i>
+                        <i class="far fa-star course-reviews__star" data-rating="{{ $i }}" onmouseenter="hoverStar({{ $i }})" onclick="event.stopPropagation(); selectRating({{ $i }}); return false;"></i>
                       @endfor
                     </div>
                     <input type="hidden" name="rating" id="ratingInput" value="5" required>
@@ -185,11 +196,15 @@
     <aside class="course-sidebar">
       <div class="course-sidebar__card card">
         <div class="course-sidebar__price">
-          ₫{{ number_format($course->price ?? 0, 0, ',', '.') }}
-          @if($course->compare_at_price)
-            <span class="course-sidebar__price-old">
-              ₫{{ number_format($course->compare_at_price, 0, ',', '.') }}
-            </span>
+          @if(($course->price ?? 0) == 0)
+            <span style="color: var(--color-success); font-weight: bold; font-size: var(--font-size-xl);">Tham gia miễn phí</span>
+          @else
+            ₫{{ number_format($course->price, 0, ',', '.') }}
+            @if($course->compare_at_price)
+              <span class="course-sidebar__price-old">
+                ₫{{ number_format($course->compare_at_price, 0, ',', '.') }}
+              </span>
+            @endif
           @endif
         </div>
         @auth
@@ -198,23 +213,32 @@
               Tiếp tục học
             </a>
           @else
-            <form action="{{ route('cart.add', $course->id) }}" method="POST">
-              @csrf
-              <button type="submit" class="btn btn--primary btn--full" style="margin-top: var(--spacing-md);">
-                Thêm vào giỏ hàng
-              </button>
-            </form>
+            @if(($course->price ?? 0) == 0)
+              <a href="{{ route('checkout.direct', $course->id) }}" class="btn btn--success btn--full" style="margin-top: var(--spacing-md); display: block; text-align: center; text-decoration: none;">
+                Tham gia miễn phí
+              </a>
+            @else
+              <a href="{{ route('checkout.direct', $course->id) }}" class="btn btn--primary btn--full" style="margin-top: var(--spacing-md); display: block; text-align: center; text-decoration: none;">
+                Thanh toán ngay
+              </a>
+            @endif
           @endif
         @else
-          <a href="{{ route('login') }}" class="btn btn--primary btn--full" style="margin-top: var(--spacing-md);">
-            Đăng nhập để mua
-          </a>
+          @if(($course->price ?? 0) == 0)
+            <a href="{{ route('checkout.direct', $course->id) }}" class="btn btn--success btn--full" style="margin-top: var(--spacing-md);">
+              Tham gia miễn phí
+            </a>
+          @else
+            <a href="{{ route('login') }}" class="btn btn--primary btn--full" style="margin-top: var(--spacing-md);">
+              Đăng nhập để mua
+            </a>
+          @endif
         @endauth
         <ul class="course-sidebar__features">
           <li>Lifetime access</li>
           <li>Certificate of completion</li>
           <li>{{ $course->video_count }} video bài học</li>
-          <li>{{ $course->total_duration }} giờ nội dung</li>
+          <li>{{ $course->formatted_total_duration }} nội dung</li>
         </ul>
       </div>
     </aside>
@@ -224,60 +248,130 @@
 <script>
 let selectedRating = 5;
 
+let isClicking = false;
+
 function hoverStar(rating) {
+  // Don't update on hover if user is clicking
+  if (isClicking) return;
+  
   const stars = document.querySelectorAll('#ratingStars i');
   stars.forEach((star, index) => {
-    if (index < rating) {
-      star.classList.remove('fa-star-o');
-      star.classList.add('fa-star');
-      star.classList.add('active');
+    // index is 0-based (0-4), rating is 1-based (1-5)
+    // Star position = index + 1
+    // If star position <= rating, it should be filled
+    const starPosition = index + 1;
+    if (starPosition <= rating) {
+      star.classList.remove('far', 'fa-star-o');
+      star.classList.add('fas', 'fa-star', 'active');
     } else {
-      star.classList.remove('fa-star');
-      star.classList.remove('active');
-      star.classList.add('fa-star-o');
+      star.classList.remove('fas', 'fa-star', 'active');
+      star.classList.add('far', 'fa-star');
     }
   });
+}
+
+function resetStars() {
+  // Don't reset if user is clicking
+  if (isClicking) return;
+  
+  // Reset to selected rating when mouse leaves
+  const stars = document.querySelectorAll('#ratingStars i');
+  if (stars.length > 0) {
+    stars.forEach((star, index) => {
+      const starPosition = index + 1;
+      if (starPosition <= selectedRating) {
+        star.classList.remove('far', 'fa-star-o');
+        star.classList.add('fas', 'fa-star', 'active');
+      } else {
+        star.classList.remove('fas', 'fa-star', 'active');
+        star.classList.add('far', 'fa-star');
+      }
+    });
+  }
 }
 
 function selectRating(rating) {
-  selectedRating = rating;
-  document.getElementById('ratingInput').value = rating;
+  // Prevent any interference
+  isClicking = true;
+  
+  // Update selected rating
+  selectedRating = parseInt(rating); // Ensure it's a number
+  
+  // Update hidden input
+  const ratingInput = document.getElementById('ratingInput');
+  if (ratingInput) {
+    ratingInput.value = selectedRating;
+  }
+  
+  // Update stars display - always update all stars
   const stars = document.querySelectorAll('#ratingStars i');
-  stars.forEach((star, index) => {
-    if (index < rating) {
-      star.classList.remove('fa-star-o');
-      star.classList.add('fa-star');
-      star.classList.add('active');
-    } else {
-      star.classList.remove('fa-star');
-      star.classList.remove('active');
-      star.classList.add('fa-star-o');
-    }
-  });
+  if (stars && stars.length > 0) {
+    stars.forEach((star, index) => {
+      const starPosition = index + 1; // 1, 2, 3, 4, 5
+      
+      // Remove all classes first (both FontAwesome style classes)
+      star.classList.remove('fas', 'far', 'fa-star', 'fa-star-o', 'active');
+      
+      // Then add the correct class
+      if (starPosition <= selectedRating) {
+        star.classList.add('fas', 'fa-star', 'active');
+      } else {
+        star.classList.add('far', 'fa-star');
+      }
+    });
+  }
+  
+  // Clear clicking flag after a short delay
+  setTimeout(() => {
+    isClicking = false;
+  }, 150);
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  selectRating(5);
+  // Only initialize rating if the form exists (user hasn't reviewed yet)
+  const ratingInput = document.getElementById('ratingInput');
+  if (ratingInput) {
+    selectRating(5);
+  }
   
   // Section collapse/expand functionality
-  document.querySelectorAll('.course-content__section-toggle').forEach(toggle => {
-    toggle.addEventListener('click', function() {
+  const sectionToggles = document.querySelectorAll('.course-content__section-toggle');
+  console.log('Found section toggles:', sectionToggles.length);
+  
+  sectionToggles.forEach((toggle, index) => {
+    console.log('Setting up toggle', index);
+    
+    toggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      console.log('Toggle clicked', index);
+      
       const section = this.closest('.course-content__section');
-      const lessons = section.querySelector('.course-content__lessons');
+      const lessons = section ? section.querySelector('.course-content__lessons') : null;
       const icon = this.querySelector('i');
       
-      if (lessons) {
+      console.log('Section:', section, 'Lessons:', lessons, 'Icon:', icon);
+      
+      if (lessons && icon) {
         const isExpanded = !lessons.classList.contains('course-content__lessons--collapsed');
+        console.log('Is expanded:', isExpanded);
         
         if (isExpanded) {
+          // Collapse
+          console.log('Collapsing...');
           lessons.classList.add('course-content__lessons--collapsed');
           icon.classList.remove('fa-chevron-down');
           icon.classList.add('fa-chevron-right');
         } else {
+          // Expand
+          console.log('Expanding...');
           lessons.classList.remove('course-content__lessons--collapsed');
           icon.classList.remove('fa-chevron-right');
           icon.classList.add('fa-chevron-down');
         }
+      } else {
+        console.error('Lessons or icon not found');
       }
     });
   });
